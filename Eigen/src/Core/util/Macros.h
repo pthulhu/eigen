@@ -95,6 +95,13 @@
 #define EIGEN_TUNE_FOR_CPU_CACHE_SIZE (sizeof(float)*256*256)
 #endif
 
+/** Defines the maximal width of the blocks used in the triangular product and solver
+  * for vectors (level 2 blas xTRMV and xTRSV). The default is 8.
+  */
+#ifndef EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH
+#define EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH 8
+#endif
+
 /** Allows to disable some optimizations which might affect the accuracy of the result.
   * Such optimization are enabled by default, and set EIGEN_FAST_MATH to 0 to disable them.
   * They currently include:
@@ -237,30 +244,16 @@ using Eigen::ei_cos;
 // needed to define it here as escaping characters in CMake add_definition's argument seems very problematic.
 #define EIGEN_DOCS_IO_FORMAT IOFormat(3, AlignCols, " ", "\n", "", "")
 
-#define EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, Op) \
-template<typename OtherDerived> \
-EIGEN_STRONG_INLINE Derived& operator Op(const Eigen::MatrixBase<OtherDerived>& other) \
-{ \
-  return Base::operator Op(other.derived()); \
-} \
-EIGEN_STRONG_INLINE Derived& operator Op(const Derived& other) \
-{ \
-  return Base::operator Op(other); \
-}
-
-#define EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, Op) \
-template<typename Other> \
-EIGEN_STRONG_INLINE Derived& operator Op(const Other& scalar) \
-{ \
-  return Base::operator Op(scalar); \
-}
-
 #define EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Derived) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, =) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, +=) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, -=) \
-EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, *=) \
-EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, /=)
+using Base::operator =; \
+using Base::operator +=; \
+using Base::operator -=; \
+using Base::operator *=; \
+using Base::operator /=; \
+EIGEN_STRONG_INLINE Derived& operator=(const Derived& other) \
+{ \
+  return Base::operator=(other); \
+}
 
 #define _EIGEN_GENERIC_PUBLIC_INTERFACE(Derived, BaseClass) \
 typedef BaseClass Base; \

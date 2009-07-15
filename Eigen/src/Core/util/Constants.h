@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
 // Eigen is free software; you can redistribute it and/or
@@ -186,9 +186,6 @@ const unsigned int HereditaryBits = RowMajorBit
                                   | EvalBeforeAssigningBit
                                   | SparseBit;
 
-// diagonal means both upper and lower triangular
-const unsigned DiagonalBits = UpperTriangularBit | LowerTriangularBit;
-
 // Possible values for the Mode parameter of part()
 const unsigned int UpperTriangular = UpperTriangularBit;
 const unsigned int StrictlyUpperTriangular = UpperTriangularBit | ZeroDiagBit;
@@ -198,12 +195,14 @@ const unsigned int SelfAdjoint = SelfAdjointBit;
 const unsigned int UnitUpperTriangular = UpperTriangularBit | UnitDiagBit;
 const unsigned int UnitLowerTriangular = LowerTriangularBit | UnitDiagBit;
 
+enum { DiagonalOnTheLeft, DiagonalOnTheRight };
+
 enum { Aligned, Unaligned };
 enum { ForceAligned, AsRequested };
 enum { ConditionalJumpCost = 5 };
 enum CornerType { TopLeft, TopRight, BottomLeft, BottomRight };
 enum DirectionType { Vertical, Horizontal, BothDirections };
-enum ProductEvaluationMode { NormalProduct, CacheFriendlyProduct, DiagonalProduct, SparseTimeSparseProduct, SparseTimeDenseProduct, DenseTimeSparseProduct };
+enum ProductEvaluationMode { NormalProduct, CacheFriendlyProduct, SparseTimeSparseProduct, SparseTimeDenseProduct, DenseTimeSparseProduct };
 
 enum {
   /** \internal Equivalent to a slice vectorization for fixed-size matrices having good alignment

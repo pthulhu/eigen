@@ -1,7 +1,7 @@
-// This file is part of Eigen, a lightweight C++ template library
+// This file is triangularView of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@gmail.com>
+// Copyright (C) 2008-2009 Gael Guennebaud <gael.guennebaud@gmail.com>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -51,8 +51,10 @@ template<typename MatrixType> void triangular(const MatrixType& m)
              v2 = VectorType::Random(rows),
              vzero = VectorType::Zero(rows);
 
-  MatrixType m1up = m1.template part<Eigen::UpperTriangular>();
-  MatrixType m2up = m2.template part<Eigen::UpperTriangular>();
+  Scalar s1 = ei_random<Scalar>();
+
+  MatrixType m1up = m1.template triangularView<Eigen::UpperTriangular>();
+  MatrixType m2up = m2.template triangularView<Eigen::UpperTriangular>();
 
   if (rows*cols>1)
   {
@@ -66,60 +68,70 @@ template<typename MatrixType> void triangular(const MatrixType& m)
   // test overloaded operator+=
   r1.setZero();
   r2.setZero();
-  r1.template part<Eigen::UpperTriangular>() +=  m1;
+  r1.template triangularView<Eigen::UpperTriangular>() +=  m1;
   r2 += m1up;
   VERIFY_IS_APPROX(r1,r2);
 
   // test overloaded operator=
   m1.setZero();
-  m1.template part<Eigen::UpperTriangular>() = (m2.transpose() * m2).lazy();
+  m1.template triangularView<Eigen::UpperTriangular>() = (m2.transpose() * m2).lazy();
   m3 = m2.transpose() * m2;
-  VERIFY_IS_APPROX(m3.template part<Eigen::LowerTriangular>().transpose(), m1);
+  VERIFY_IS_APPROX(m3.template triangularView<Eigen::LowerTriangular>().transpose().toDense(), m1);
 
   // test overloaded operator=
   m1.setZero();
-  m1.template part<Eigen::LowerTriangular>() = (m2.transpose() * m2).lazy();
-  VERIFY_IS_APPROX(m3.template part<Eigen::LowerTriangular>(), m1);
-
-  VERIFY_IS_APPROX(m3.template part<DiagonalBits>(), m3.diagonal().asDiagonal());
+  m1.template triangularView<Eigen::LowerTriangular>() = (m2.transpose() * m2).lazy();
+  VERIFY_IS_APPROX(m3.template triangularView<Eigen::LowerTriangular>().toDense(), m1);
 
   m1 = MatrixType::Random(rows, cols);
   for (int i=0; i<rows; ++i)
     while (ei_abs2(m1(i,i))<1e-3) m1(i,i) = ei_random<Scalar>();
 
   Transpose<MatrixType> trm4(m4);
-  // test back and forward subsitution
-  m3 = m1.template part<Eigen::LowerTriangular>();
-  VERIFY(m3.template marked<Eigen::LowerTriangular>().solveTriangular(m3).cwise().abs().isIdentity(test_precision<RealScalar>()));
-  VERIFY(m3.transpose().template marked<Eigen::UpperTriangular>()
-    .solveTriangular(m3.transpose()).cwise().abs().isIdentity(test_precision<RealScalar>()));
+  // test back and forward subsitution with a vector as the rhs
+  m3 = m1.template triangularView<Eigen::UpperTriangular>();
+  VERIFY(v2.isApprox(m3.adjoint() * (m1.adjoint().template triangularView<Eigen::LowerTriangular>().solve(v2)), largerEps));
+  m3 = m1.template triangularView<Eigen::LowerTriangular>();
+  VERIFY(v2.isApprox(m3.transpose() * (m1.transpose().template triangularView<Eigen::UpperTriangular>().solve(v2)), largerEps));
+  m3 = m1.template triangularView<Eigen::UpperTriangular>();
+  VERIFY(v2.isApprox(m3 * (m1.template triangularView<Eigen::UpperTriangular>().solve(v2)), largerEps));
+  m3 = m1.template triangularView<Eigen::LowerTriangular>();
+  VERIFY(v2.isApprox(m3.conjugate() * (m1.conjugate().template triangularView<Eigen::LowerTriangular>().solve(v2)), largerEps));
+
+  // test back and forward subsitution with a matrix as the rhs
+  m3 = m1.template triangularView<Eigen::UpperTriangular>();
+  VERIFY(m2.isApprox(m3.adjoint() * (m1.adjoint().template triangularView<Eigen::LowerTriangular>().solve(m2)), largerEps));
+  m3 = m1.template triangularView<Eigen::LowerTriangular>();
+  VERIFY(m2.isApprox(m3.transpose() * (m1.transpose().template triangularView<Eigen::UpperTriangular>().solve(m2)), largerEps));
+  m3 = m1.template triangularView<Eigen::UpperTriangular>();
+  VERIFY(m2.isApprox(m3 * (m1.template triangularView<Eigen::UpperTriangular>().solve(m2)), largerEps));
+  m3 = m1.template triangularView<Eigen::LowerTriangular>();
+  VERIFY(m2.isApprox(m3.conjugate() * (m1.conjugate().template triangularView<Eigen::LowerTriangular>().solve(m2)), largerEps));
+
   // check M * inv(L) using in place API
   m4 = m3;
-  m3.transpose().template marked<Eigen::UpperTriangular>().solveTriangularInPlace(trm4);
+  m3.transpose().template triangularView<Eigen::UpperTriangular>().solveInPlace(trm4);
   VERIFY(m4.cwise().abs().isIdentity(test_precision<RealScalar>()));
 
-  m3 = m1.template part<Eigen::UpperTriangular>();
-  VERIFY(m3.template marked<Eigen::UpperTriangular>().solveTriangular(m3).cwise().abs().isIdentity(test_precision<RealScalar>()));
-  VERIFY(m3.transpose().template marked<Eigen::LowerTriangular>()
-    .solveTriangular(m3.transpose()).cwise().abs().isIdentity(test_precision<RealScalar>()));
   // check M * inv(U) using in place API
+  m3 = m1.template triangularView<Eigen::UpperTriangular>();
   m4 = m3;
-  m3.transpose().template marked<Eigen::LowerTriangular>().solveTriangularInPlace(trm4);
+  m3.transpose().template triangularView<Eigen::LowerTriangular>().solveInPlace(trm4);
   VERIFY(m4.cwise().abs().isIdentity(test_precision<RealScalar>()));
 
-  m3 = m1.template part<Eigen::UpperTriangular>();
-  VERIFY(m2.isApprox(m3 * (m3.template marked<Eigen::UpperTriangular>().solveTriangular(m2)), largerEps));
-  m3 = m1.template part<Eigen::LowerTriangular>();
-  VERIFY(m2.isApprox(m3 * (m3.template marked<Eigen::LowerTriangular>().solveTriangular(m2)), largerEps));
+  // check solve with unit diagonal
+  m3 = m1.template triangularView<Eigen::UnitUpperTriangular>();
+  VERIFY(m2.isApprox(m3 * (m1.template triangularView<Eigen::UnitUpperTriangular>().solve(m2)), largerEps));
 
-  VERIFY((m1.template part<Eigen::UpperTriangular>() * m2.template part<Eigen::UpperTriangular>()).isUpperTriangular());
+//   VERIFY((  m1.template triangularView<Eigen::UpperTriangular>()
+//           * m2.template triangularView<Eigen::UpperTriangular>()).isUpperTriangular());
 
   // test swap
   m1.setOnes();
   m2.setZero();
-  m2.template part<Eigen::UpperTriangular>().swap(m1);
+  m2.template triangularView<Eigen::UpperTriangular>().swap(m1);
   m3.setZero();
-  m3.template part<Eigen::UpperTriangular>().setOnes();
+  m3.template triangularView<Eigen::UpperTriangular>().setOnes();
   VERIFY_IS_APPROX(m2,m3);
 
 }
@@ -132,7 +144,7 @@ void test_triangular()
     CALL_SUBTEST( triangular(Matrix3d()) );
     CALL_SUBTEST( triangular(MatrixXcf(4, 4)) );
     CALL_SUBTEST( triangular(Matrix<std::complex<float>,8, 8>()) );
-    CALL_SUBTEST( triangular(MatrixXd(17,17)) );
+    CALL_SUBTEST( triangular(MatrixXcd(17,17)) );
     CALL_SUBTEST( triangular(Matrix<float,Dynamic,Dynamic,RowMajor>(5, 5)) );
   }
 }

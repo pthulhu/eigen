@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -32,12 +32,14 @@
  * same alignment pattern.
  * TODO: since rhs gets evaluated only once, no need to evaluate it
  */
-template<typename Scalar, typename RhsType>
-static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
+template<bool ConjugateLhs, bool ConjugateRhs, typename Scalar, typename RhsType>
+static EIGEN_DONT_INLINE
+void ei_cache_friendly_product_colmajor_times_vector(
   int size,
   const Scalar* lhs, int lhsStride,
   const RhsType& rhs,
-  Scalar* res)
+  Scalar* res,
+  Scalar alpha)
 {
   #ifdef _EIGEN_ACCUMULATE_PACKETS
   #error _EIGEN_ACCUMULATE_PACKETS has already been defined
@@ -46,10 +48,16 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
     ei_pstore(&res[j], \
       ei_padd(ei_pload(&res[j]), \
         ei_padd( \
-          ei_padd(ei_pmul(ptmp0,EIGEN_CAT(ei_ploa , A0)(&lhs0[j])), \
-                  ei_pmul(ptmp1,EIGEN_CAT(ei_ploa , A13)(&lhs1[j]))), \
-          ei_padd(ei_pmul(ptmp2,EIGEN_CAT(ei_ploa , A2)(&lhs2[j])), \
-                  ei_pmul(ptmp3,EIGEN_CAT(ei_ploa , A13)(&lhs3[j]))) )))
+          ei_padd(cj.pmul(EIGEN_CAT(ei_ploa , A0)(&lhs0[j]),    ptmp0), \
+                  cj.pmul(EIGEN_CAT(ei_ploa , A13)(&lhs1[j]),   ptmp1)), \
+          ei_padd(cj.pmul(EIGEN_CAT(ei_ploa , A2)(&lhs2[j]),    ptmp2), \
+                  cj.pmul(EIGEN_CAT(ei_ploa , A13)(&lhs3[j]),   ptmp3)) )))
+
+  ei_conj_helper<ConjugateLhs,ConjugateRhs> cj;
+  if(ConjugateRhs)
+    alpha = ei_conj(alpha);
+
+//   std::cerr << "prod " << size << " " << rhs.size() << "\n";
 
   typedef typename ei_packet_traits<Scalar>::type Packet;
   const int PacketSize = sizeof(Packet)/sizeof(Scalar);
@@ -95,7 +103,10 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
       // note that the skiped columns are processed later.
     }
 
-    ei_internal_assert((alignmentPattern==NoneAligned) || (size_t(lhs+alignedStart+lhsStride*skipColumns)%sizeof(Packet))==0);
+    ei_internal_assert(  (alignmentPattern==NoneAligned)
+                      || (skipColumns + columnsAtOnce >= rhs.size())
+                      || PacketSize > size
+                      || (size_t(lhs+alignedStart+lhsStride*skipColumns)%sizeof(Packet))==0);
   }
 
   int offset1 = (FirstAligned && alignmentStep==1?3:1);
@@ -104,11 +115,11 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
   int columnBound = ((rhs.size()-skipColumns)/columnsAtOnce)*columnsAtOnce + skipColumns;
   for (int i=skipColumns; i<columnBound; i+=columnsAtOnce)
   {
-    Packet ptmp0 = ei_pset1(rhs[i]),   ptmp1 = ei_pset1(rhs[i+offset1]),
-           ptmp2 = ei_pset1(rhs[i+2]), ptmp3 = ei_pset1(rhs[i+offset3]);
+    Packet ptmp0 = ei_pset1(alpha*rhs[i]),   ptmp1 = ei_pset1(alpha*rhs[i+offset1]),
+           ptmp2 = ei_pset1(alpha*rhs[i+2]), ptmp3 = ei_pset1(alpha*rhs[i+offset3]);
 
     // this helps a lot generating better binary code
-    const Scalar *lhs0 = lhs + i*lhsStride, *lhs1 = lhs + (i+offset1)*lhsStride,
+    const Scalar *lhs0 = lhs + i*lhsStride,     *lhs1 = lhs + (i+offset1)*lhsStride,
                  *lhs2 = lhs + (i+2)*lhsStride, *lhs3 = lhs + (i+offset3)*lhsStride;
 
     if (PacketSize>1)
@@ -116,7 +127,12 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
       /* explicit vectorization */
       // process initial unaligned coeffs
       for (int j=0; j<alignedStart; ++j)
-        res[j] += ei_pfirst(ptmp0)*lhs0[j] + ei_pfirst(ptmp1)*lhs1[j] + ei_pfirst(ptmp2)*lhs2[j] + ei_pfirst(ptmp3)*lhs3[j];
+      {
+        res[j] = cj.pmadd(lhs0[j], ei_pfirst(ptmp0), res[j]);
+        res[j] = cj.pmadd(lhs1[j], ei_pfirst(ptmp1), res[j]);
+        res[j] = cj.pmadd(lhs2[j], ei_pfirst(ptmp2), res[j]);
+        res[j] = cj.pmadd(lhs3[j], ei_pfirst(ptmp3), res[j]);
+      }
 
       if (alignedSize>alignedStart)
       {
@@ -147,19 +163,19 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
 
                 A00 = ei_pload (&lhs0[j]);
                 A10 = ei_pload (&lhs0[j+PacketSize]);
-                A00 = ei_pmadd(ptmp0, A00, ei_pload(&res[j]));
-                A10 = ei_pmadd(ptmp0, A10, ei_pload(&res[j+PacketSize]));
+                A00 = cj.pmadd(A00, ptmp0, ei_pload(&res[j]));
+                A10 = cj.pmadd(A10, ptmp0, ei_pload(&res[j+PacketSize]));
 
-                A00 = ei_pmadd(ptmp1, A01, A00);
+                A00 = cj.pmadd(A01, ptmp1, A00);
                 A01 = ei_pload(&lhs1[j-1+2*PacketSize]);  ei_palign<1>(A11,A01);
-                A00 = ei_pmadd(ptmp2, A02, A00);
+                A00 = cj.pmadd(A02, ptmp2, A00);
                 A02 = ei_pload(&lhs2[j-2+2*PacketSize]);  ei_palign<2>(A12,A02);
-                A00 = ei_pmadd(ptmp3, A03, A00);
+                A00 = cj.pmadd(A03, ptmp3, A00);
                 ei_pstore(&res[j],A00);
                 A03 = ei_pload(&lhs3[j-3+2*PacketSize]);  ei_palign<3>(A13,A03);
-                A10 = ei_pmadd(ptmp1, A11, A10);
-                A10 = ei_pmadd(ptmp2, A12, A10);
-                A10 = ei_pmadd(ptmp3, A13, A10);
+                A10 = cj.pmadd(A11, ptmp1, A10);
+                A10 = cj.pmadd(A12, ptmp2, A10);
+                A10 = cj.pmadd(A13, ptmp3, A10);
                 ei_pstore(&res[j+PacketSize],A10);
               }
             }
@@ -176,7 +192,12 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
 
     /* process remaining coeffs (or all if there is no explicit vectorization) */
     for (int j=alignedSize; j<size; ++j)
-	  res[j] += ei_pfirst(ptmp0)*lhs0[j] + ei_pfirst(ptmp1)*lhs1[j] + ei_pfirst(ptmp2)*lhs2[j] + ei_pfirst(ptmp3)*lhs3[j];
+    {
+      res[j] = cj.pmadd(lhs0[j], ei_pfirst(ptmp0), res[j]);
+      res[j] = cj.pmadd(lhs1[j], ei_pfirst(ptmp1), res[j]);
+      res[j] = cj.pmadd(lhs2[j], ei_pfirst(ptmp2), res[j]);
+      res[j] = cj.pmadd(lhs3[j], ei_pfirst(ptmp3), res[j]);
+    }
   }
 
   // process remaining first and last columns (at most columnsAtOnce-1)
@@ -186,7 +207,7 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
   {
     for (int i=start; i<end; ++i)
     {
-      Packet ptmp0 = ei_pset1(rhs[i]);
+      Packet ptmp0 = ei_pset1(alpha*rhs[i]);
       const Scalar* lhs0 = lhs + i*lhsStride;
 
       if (PacketSize>1)
@@ -194,20 +215,20 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
         /* explicit vectorization */
         // process first unaligned result's coeffs
         for (int j=0; j<alignedStart; ++j)
-          res[j] += ei_pfirst(ptmp0) * lhs0[j];
+          res[j] += cj.pmul(lhs0[j], ei_pfirst(ptmp0));
 
         // process aligned result's coeffs
         if ((size_t(lhs0+alignedStart)%sizeof(Packet))==0)
           for (int j = alignedStart;j<alignedSize;j+=PacketSize)
-            ei_pstore(&res[j], ei_pmadd(ptmp0,ei_pload(&lhs0[j]),ei_pload(&res[j])));
+            ei_pstore(&res[j], cj.pmadd(ei_pload(&lhs0[j]), ptmp0, ei_pload(&res[j])));
         else
           for (int j = alignedStart;j<alignedSize;j+=PacketSize)
-            ei_pstore(&res[j], ei_pmadd(ptmp0,ei_ploadu(&lhs0[j]),ei_pload(&res[j])));
+            ei_pstore(&res[j], cj.pmadd(ei_ploadu(&lhs0[j]), ptmp0, ei_pload(&res[j])));
       }
 
       // process remaining scalars (or all if no explicit vectorization)
       for (int j=alignedSize; j<size; ++j)
-        res[j] += ei_pfirst(ptmp0) * lhs0[j];
+        res[j] += cj.pmul(lhs0[j], ei_pfirst(ptmp0));
     }
     if (skipColumns)
     {
@@ -222,11 +243,12 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_colmajor_times_vector(
 }
 
 // TODO add peeling to mask unaligned load/stores
-template<typename Scalar, typename ResType>
+template<bool ConjugateLhs, bool ConjugateRhs, typename Scalar, typename ResType>
 static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
   const Scalar* lhs, int lhsStride,
   const Scalar* rhs, int rhsSize,
-  ResType& res)
+  ResType& res,
+  Scalar alpha)
 {
   #ifdef _EIGEN_ACCUMULATE_PACKETS
   #error _EIGEN_ACCUMULATE_PACKETS has already been defined
@@ -234,10 +256,12 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
 
   #define _EIGEN_ACCUMULATE_PACKETS(A0,A13,A2) {\
     Packet b = ei_pload(&rhs[j]); \
-    ptmp0 = ei_pmadd(b, EIGEN_CAT(ei_ploa,A0) (&lhs0[j]), ptmp0); \
-    ptmp1 = ei_pmadd(b, EIGEN_CAT(ei_ploa,A13)(&lhs1[j]), ptmp1); \
-    ptmp2 = ei_pmadd(b, EIGEN_CAT(ei_ploa,A2) (&lhs2[j]), ptmp2); \
-    ptmp3 = ei_pmadd(b, EIGEN_CAT(ei_ploa,A13)(&lhs3[j]), ptmp3); }
+    ptmp0 = cj.pmadd(EIGEN_CAT(ei_ploa,A0) (&lhs0[j]), b, ptmp0); \
+    ptmp1 = cj.pmadd(EIGEN_CAT(ei_ploa,A13)(&lhs1[j]), b, ptmp1); \
+    ptmp2 = cj.pmadd(EIGEN_CAT(ei_ploa,A2) (&lhs2[j]), b, ptmp2); \
+    ptmp3 = cj.pmadd(EIGEN_CAT(ei_ploa,A13)(&lhs3[j]), b, ptmp3); }
+
+  ei_conj_helper<ConjugateLhs,ConjugateRhs> cj;
 
   typedef typename ei_packet_traits<Scalar>::type Packet;
   const int PacketSize = sizeof(Packet)/sizeof(Scalar);
@@ -283,8 +307,11 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
       skipRows = std::min(skipRows,res.size());
       // note that the skiped columns are processed later.
     }
-    ei_internal_assert((alignmentPattern==NoneAligned) || PacketSize==1
-      || (size_t(lhs+alignedStart+lhsStride*skipRows)%sizeof(Packet))==0);
+    ei_internal_assert(  alignmentPattern==NoneAligned
+                      || PacketSize==1
+                      || (skipRows + rowsAtOnce >= res.size())
+                      || PacketSize > rhsSize
+                      || (size_t(lhs+alignedStart+lhsStride*skipRows)%sizeof(Packet))==0);
   }
 
   int offset1 = (FirstAligned && alignmentStep==1?3:1);
@@ -309,7 +336,8 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
       for (int j=0; j<alignedStart; ++j)
       {
         Scalar b = rhs[j];
-        tmp0 += b*lhs0[j]; tmp1 += b*lhs1[j]; tmp2 += b*lhs2[j]; tmp3 += b*lhs3[j];
+        tmp0 += cj.pmul(lhs0[j],b); tmp1 += cj.pmul(lhs1[j],b);
+        tmp2 += cj.pmul(lhs2[j],b); tmp3 += cj.pmul(lhs3[j],b);
       }
 
       if (alignedSize>alignedStart)
@@ -345,19 +373,19 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
                 A12 = ei_pload(&lhs2[j-2+PacketSize]);  ei_palign<2>(A02,A12);
                 A13 = ei_pload(&lhs3[j-3+PacketSize]);  ei_palign<3>(A03,A13);
 
-                ptmp0 = ei_pmadd(b, ei_pload (&lhs0[j]), ptmp0);
-                ptmp1 = ei_pmadd(b, A01, ptmp1);
+                ptmp0 = cj.pmadd(ei_pload (&lhs0[j]), b, ptmp0);
+                ptmp1 = cj.pmadd(A01, b, ptmp1);
                 A01 = ei_pload(&lhs1[j-1+2*PacketSize]);  ei_palign<1>(A11,A01);
-                ptmp2 = ei_pmadd(b, A02, ptmp2);
+                ptmp2 = cj.pmadd(A02, b, ptmp2);
                 A02 = ei_pload(&lhs2[j-2+2*PacketSize]);  ei_palign<2>(A12,A02);
-                ptmp3 = ei_pmadd(b, A03, ptmp3);
+                ptmp3 = cj.pmadd(A03, b, ptmp3);
                 A03 = ei_pload(&lhs3[j-3+2*PacketSize]);  ei_palign<3>(A13,A03);
 
                 b = ei_pload(&rhs[j+PacketSize]);
-                ptmp0 = ei_pmadd(b, ei_pload (&lhs0[j+PacketSize]), ptmp0);
-                ptmp1 = ei_pmadd(b, A11, ptmp1);
-                ptmp2 = ei_pmadd(b, A12, ptmp2);
-                ptmp3 = ei_pmadd(b, A13, ptmp3);
+                ptmp0 = cj.pmadd(ei_pload (&lhs0[j+PacketSize]), b, ptmp0);
+                ptmp1 = cj.pmadd(A11, b, ptmp1);
+                ptmp2 = cj.pmadd(A12, b, ptmp2);
+                ptmp3 = cj.pmadd(A13, b, ptmp3);
               }
             }
             for (int j = peeledSize; j<alignedSize; j+=PacketSize)
@@ -380,9 +408,10 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
     for (int j=alignedSize; j<size; ++j)
     {
       Scalar b = rhs[j];
-      tmp0 += b*lhs0[j]; tmp1 += b*lhs1[j]; tmp2 += b*lhs2[j]; tmp3 += b*lhs3[j];
+      tmp0 += cj.pmul(lhs0[j],b); tmp1 += cj.pmul(lhs1[j],b);
+      tmp2 += cj.pmul(lhs2[j],b); tmp3 += cj.pmul(lhs3[j],b);
     }
-    res[i] += tmp0; res[i+offset1] += tmp1; res[i+2] += tmp2; res[i+offset3] += tmp3;
+    res[i] += alpha*tmp0; res[i+offset1] += alpha*tmp1; res[i+2] += alpha*tmp2; res[i+offset3] += alpha*tmp3;
   }
 
   // process remaining first and last rows (at most columnsAtOnce-1)
@@ -398,25 +427,25 @@ static EIGEN_DONT_INLINE void ei_cache_friendly_product_rowmajor_times_vector(
       // process first unaligned result's coeffs
       // FIXME this loop get vectorized by the compiler !
       for (int j=0; j<alignedStart; ++j)
-        tmp0 += rhs[j] * lhs0[j];
+        tmp0 += cj.pmul(lhs0[j], rhs[j]);
 
       if (alignedSize>alignedStart)
       {
         // process aligned rhs coeffs
         if ((size_t(lhs0+alignedStart)%sizeof(Packet))==0)
           for (int j = alignedStart;j<alignedSize;j+=PacketSize)
-            ptmp0 = ei_pmadd(ei_pload(&rhs[j]), ei_pload(&lhs0[j]), ptmp0);
+            ptmp0 = cj.pmadd(ei_pload(&lhs0[j]), ei_pload(&rhs[j]), ptmp0);
         else
           for (int j = alignedStart;j<alignedSize;j+=PacketSize)
-            ptmp0 = ei_pmadd(ei_pload(&rhs[j]), ei_ploadu(&lhs0[j]), ptmp0);
+            ptmp0 = cj.pmadd(ei_ploadu(&lhs0[j]), ei_pload(&rhs[j]), ptmp0);
         tmp0 += ei_predux(ptmp0);
       }
 
       // process remaining scalars
       // FIXME this loop get vectorized by the compiler !
       for (int j=alignedSize; j<size; ++j)
-        tmp0 += rhs[j] * lhs0[j];
-      res[i] += tmp0;
+        tmp0 += cj.pmul(lhs0[j], rhs[j]);
+      res[i] += alpha*tmp0;
     }
     if (skipRows)
     {

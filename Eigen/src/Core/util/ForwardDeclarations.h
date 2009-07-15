@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
+// Copyright (C) 2007-2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,9 @@
 template<typename T> struct ei_traits;
 template<typename T> struct NumTraits;
 
+template<typename Derived> struct AnyMatrixBase;
+template<typename Derived> struct MultiplierBase;
+
 template<typename _Scalar, int _Rows, int _Cols,
          int _Options = EIGEN_DEFAULT_MATRIX_STORAGE_ORDER_OPTION | AutoAlign,
          int _MaxRows = _Rows, int _MaxCols = _Cols> class Matrix;
@@ -47,17 +50,23 @@ template<typename UnaryOp,   typename MatrixType>         class CwiseUnaryOp;
 template<typename ViewOp,    typename MatrixType>         class CwiseUnaryView;
 template<typename BinaryOp,  typename Lhs, typename Rhs>  class CwiseBinaryOp;
 template<typename Lhs, typename Rhs, int ProductMode> class Product;
-template<typename CoeffsVectorType, typename Derived> class DiagonalMatrixBase;
-template<typename CoeffsVectorType> class DiagonalMatrixWrapper;
+
+template<typename Derived> class DiagonalBase;
+template<typename _DiagonalVectorType> class DiagonalWrapper;
 template<typename _Scalar, int _Size> class DiagonalMatrix;
+template<typename MatrixType, typename DiagonalType, int ProductOrder> class DiagonalProduct;
 template<typename MatrixType, int Index> class Diagonal;
+
 template<typename MatrixType, int PacketAccess = AsRequested> class Map;
-template<typename MatrixType, unsigned int Mode> class Part;
-template<typename MatrixType, unsigned int Mode> class Extract;
+template<typename Derived> class TriangularBase;
+template<typename MatrixType, unsigned int Mode> class TriangularView;
+template<typename MatrixType, unsigned int Mode> class SelfAdjointView;
 template<typename ExpressionType> class Cwise;
 template<typename ExpressionType> class WithFormat;
 template<typename MatrixType> struct CommaInitializer;
 template<typename Functor, typename EvalType> class ReturnByValue;
+
+template<typename _Scalar, int Rows=Dynamic, int Cols=Dynamic, int Supers=Dynamic, int Subs=Dynamic, int Options=0> class BandMatrix;
 
 
 template<typename Lhs, typename Rhs> struct ei_product_mode;
@@ -96,13 +105,6 @@ template<typename Scalar1,typename Scalar2> struct ei_scalar_multiple2_op;
 
 struct IOFormat;
 
-template<typename Scalar>
-static void ei_cache_friendly_product(
-  int _rows, int _cols, int depth,
-  bool _lhsRowMajor, const Scalar* _lhs, int _lhsStride,
-  bool _rhsRowMajor, const Scalar* _rhs, int _rhsStride,
-  bool resRowMajor, Scalar* res, int resStride);
-
 // Array module
 template<typename ConditionMatrixType, typename ThenMatrixType, typename ElseMatrixType> class Select;
 template<typename MatrixType, typename BinaryOp, int Direction> class PartialReduxExpr;
@@ -114,7 +116,7 @@ template<typename MatrixType> class LU;
 template<typename MatrixType> class PartialLU;
 template<typename MatrixType> class HouseholderQR;
 template<typename MatrixType> class SVD;
-template<typename MatrixType> class LLT;
+template<typename MatrixType, int UpLo = LowerTriangular> class LLT;
 template<typename MatrixType> class LDLT;
 
 // Geometry module:

@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -25,15 +25,7 @@
 #ifndef EIGEN_SELFADJOINT_MATRIX_VECTOR_H
 #define EIGEN_SELFADJOINT_MATRIX_VECTOR_H
 
-template<bool Conjugate> struct ei_conj_if {
-  template<typename Scalar> Scalar operator() (const Scalar& x) const { return ei_conj(x); }
-};
-
-template<> struct ei_conj_if<false> {
-  template<typename Scalar> Scalar& operator() (Scalar& x) const { return x; }
-};
-
-/* Optimized col-major selfadjoint matrix * vector product:
+/* Optimized selfadjoint matrix * vector product:
  * This algorithm processes 2 columns at onces that allows to both reduce
  * the number of load/stores of the result by a factor 2 and to reduce
  * the instruction dependency.
@@ -86,11 +78,11 @@ static EIGEN_DONT_INLINE void ei_product_selfadjoint_vector(
     size_t alignedStart = (starti) + ei_alignmentOffset(&res[starti], endi-starti);
     alignedEnd = alignedStart + ((endi-alignedStart)/(PacketSize))*(PacketSize);
 
-    res[j]   += t0 * conj0(A0[j]);
+    res[j] += t0 * conj0(A0[j]);
     if(FirstTriangular)
     {
-      res[j+1]   += t1 * conj0(A1[j+1]);
-      res[j] += t1 * conj0(A1[j]);
+      res[j+1] += t1 * conj0(A1[j+1]);
+      res[j]   += t1 * conj0(A1[j]);
       t3 += conj1(A1[j]) * rhs[j];
     }
     else

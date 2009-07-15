@@ -264,11 +264,4 @@ template<typename XprType, typename CastType> struct ei_cast_return_type
                               const XprType&,CastType>::ret type;
 };
 
-template<typename T> struct ei_is_diagonal
-{
-  enum {
-    ret = ( int(ei_traits<T>::Flags) & DiagonalBits ) == DiagonalBits
-  };
-};
-
 #endif // EIGEN_XPRHELPER_H

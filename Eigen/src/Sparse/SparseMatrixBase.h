@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -37,6 +37,9 @@
   *
   */
 template<typename Derived> class SparseMatrixBase
+#ifndef EIGEN_PARSED_BY_DOXYGEN
+  : public MultiplierBase<Derived>
+#endif // not EIGEN_PARSED_BY_DOXYGEN
 {
   public:
 
@@ -303,9 +306,21 @@ template<typename Derived> class SparseMatrixBase
     { return matrix*scalar; }
 
 
+    // sparse * sparse
     template<typename OtherDerived>
     const typename SparseProductReturnType<Derived,OtherDerived>::Type
     operator*(const SparseMatrixBase<OtherDerived> &other) const;
+
+    // sparse * diagonal
+    template<typename OtherDerived>
+    const SparseDiagonalProduct<Derived,OtherDerived>
+    operator*(const DiagonalBase<OtherDerived> &other) const;
+
+    // diagonal * sparse
+    template<typename OtherDerived> friend
+    const SparseDiagonalProduct<OtherDerived,Derived>
+    operator*(const DiagonalBase<OtherDerived> &lhs, const SparseMatrixBase& rhs)
+    { return SparseDiagonalProduct<OtherDerived,Derived>(lhs.derived(), rhs.derived()); }
 
     // dense * sparse (return a dense object)
     template<typename OtherDerived> friend
@@ -438,18 +453,19 @@ template<typename Derived> class SparseMatrixBase
 //     Derived& setRandom();
 //     Derived& setIdentity();
 
+      /** \internal use operator= */
+      template<typename DenseDerived>
+      void evalToDense(MatrixBase<DenseDerived>& dst) const
+      {
+        dst.setZero();
+        for (int j=0; j<outerSize(); ++j)
+          for (typename Derived::InnerIterator i(derived(),j); i; ++i)
+            dst.coeffRef(i.row(),i.col()) = i.value();
+      }
+
       Matrix<Scalar,RowsAtCompileTime,ColsAtCompileTime> toDense() const
       {
-        Matrix<Scalar,RowsAtCompileTime,ColsAtCompileTime> res(rows(),cols());
-        res.setZero();
-        for (int j=0; j<outerSize(); ++j)
-        {
-          for (typename Derived::InnerIterator i(derived(),j); i; ++i)
-          {
-            res.coeffRef(i.row(),i.col()) = i.value();
-          }
-        }
-        return res;
+        return derived();
       }
 
     template<typename OtherDerived>

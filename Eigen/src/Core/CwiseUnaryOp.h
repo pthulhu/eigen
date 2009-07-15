@@ -92,6 +92,13 @@ class CwiseUnaryOp : ei_no_assignment_operator,
       return m_functor.packetOp(m_matrix.template packet<LoadMode>(index));
     }
 
+    /** \internal used for introspection */
+    const UnaryOp& _functor() const { return m_functor; }
+
+    /** \internal used for introspection */
+    const typename ei_cleantype<typename MatrixType::Nested>::type&
+    _expression() const { return m_matrix; }
+
   protected:
     const typename MatrixType::Nested m_matrix;
     const UnaryOp m_functor;

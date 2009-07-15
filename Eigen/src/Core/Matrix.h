@@ -336,11 +336,11 @@ class Matrix
     EIGEN_STRONG_INLINE Matrix& operator=(const ReturnByValue<OtherDerived,OtherEvalType>& func)
     { return Base::operator=(func); }
 
-    EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Matrix, +=)
-    EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Matrix, -=)
-    EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Matrix, *=)
-    EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Matrix, /=)
-
+    using Base::operator +=;
+    using Base::operator -=;
+    using Base::operator *=;
+    using Base::operator /=;
+    
     /** Default constructor.
       *
       * For fixed-size matrices, does nothing.
@@ -439,6 +439,23 @@ class Matrix
     { other.evalTo(*this); }
     /** Destructor */
     inline ~Matrix() {}
+
+    /** \sa MatrixBase::operator=(const AnyMatrixBase<OtherDerived>&) */
+    template<typename OtherDerived>
+    EIGEN_STRONG_INLINE Matrix& operator=(const AnyMatrixBase<OtherDerived> &other)
+    {
+      resize(other.derived().rows(), other.derived().cols());
+      Base::operator=(other.derived());
+      return *this;
+    }
+
+    /** \sa MatrixBase::operator=(const AnyMatrixBase<OtherDerived>&) */
+    template<typename OtherDerived>
+    EIGEN_STRONG_INLINE Matrix(const AnyMatrixBase<OtherDerived> &other)
+      : m_storage(other.derived().rows() * other.derived().cols(), other.derived().rows(), other.derived().cols())
+    {
+      *this = other;
+    }
 
     /** Override MatrixBase::swap() since for dynamic-sized matrices of same type it is enough to swap the
       * data pointers.

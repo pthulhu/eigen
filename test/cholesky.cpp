@@ -86,10 +86,18 @@ template<typename MatrixType> void cholesky(const MatrixType& m)
 
   {
     LLT<SquareMatrixType> chol(symm);
-    VERIFY_IS_APPROX(symm, chol.matrixL() * chol.matrixL().adjoint());
+    VERIFY_IS_APPROX(symm, chol.matrixL().toDense() * chol.matrixL().adjoint().toDense());
     chol.solve(vecB, &vecX);
     VERIFY_IS_APPROX(symm * vecX, vecB);
     chol.solve(matB, &matX);
+    VERIFY_IS_APPROX(symm * matX, matB);
+
+    // test the upper mode
+    LLT<SquareMatrixType,UpperTriangular> cholup(symm);
+    VERIFY_IS_APPROX(symm, cholup.matrixL().toDense() * chol.matrixL().adjoint().toDense());
+    cholup.solve(vecB, &vecX);
+    VERIFY_IS_APPROX(symm * vecX, vecB);
+    cholup.solve(matB, &matX);
     VERIFY_IS_APPROX(symm * matX, matB);
   }
 
