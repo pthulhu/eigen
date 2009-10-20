@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -78,10 +78,8 @@ struct ei_any_unroller<Derived, Dynamic>
 };
 
 /** \array_module
-  * 
-  * \returns true if all coefficients are true
   *
-  * \addexample CwiseAll \label How to check whether a point is inside a box (using operator< and all())
+  * \returns true if all coefficients are true
   *
   * Example: \include MatrixBase_all.cpp
   * Output: \verbinclude MatrixBase_all.out
@@ -107,7 +105,7 @@ inline bool MatrixBase<Derived>::all() const
 }
 
 /** \array_module
-  * 
+  *
   * \returns true if at least one coefficient is true
   *
   * \sa MatrixBase::all()
@@ -131,7 +129,7 @@ inline bool MatrixBase<Derived>::any() const
 }
 
 /** \array_module
-  * 
+  *
   * \returns the number of coefficients which evaluate to true
   *
   * \sa MatrixBase::all(), MatrixBase::any()

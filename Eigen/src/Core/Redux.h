@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -110,6 +110,16 @@ struct ei_redux_novec_unroller<Func, Derived, Start, 1>
   {
     return mat.coeff(row, col);
   }
+};
+
+// This is actually dead code and will never be called. It is required
+// to prevent false warnings regarding failed inlining though
+// for 0 length run() will never be called at all.
+template<typename Func, typename Derived, int Start>
+struct ei_redux_novec_unroller<Func, Derived, Start, 0>
+{
+  typedef typename Derived::Scalar Scalar;
+  EIGEN_STRONG_INLINE static Scalar run(const Derived&, const Func&) { return Scalar(); }
 };
 
 /*** vectorization ***/
@@ -297,7 +307,7 @@ struct ei_redux_impl<Func, Derived, LinearVectorization, CompleteUnrolling>
 /** \returns the result of a full redux operation on the whole matrix or vector using \a func
   *
   * The template parameter \a BinaryOp is the type of the functor \a func which must be
-  * an assiociative operator. Both current STL and TR1 functor styles are handled.
+  * an associative operator. Both current STL and TR1 functor styles are handled.
   *
   * \sa MatrixBase::sum(), MatrixBase::minCoeff(), MatrixBase::maxCoeff(), MatrixBase::colwise(), MatrixBase::rowwise()
   */

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -116,6 +116,9 @@ struct CommaInitializer
   int m_row;              // current row id
   int m_col;              // current col id
   int m_currentBlockRows; // current block height
+
+private:
+  CommaInitializer& operator=(const CommaInitializer&);
 };
 
 /** \anchor MatrixBaseCommaInitRef
@@ -123,8 +126,6 @@ struct CommaInitializer
   *
   * The coefficients must be provided in a row major order and exactly match
   * the size of the matrix. Otherwise an assertion is raised.
-  *
-  * \addexample CommaInit \label How to easily set all the coefficients of a matrix
   *
   * Example: \include MatrixBase_set.cpp
   * Output: \verbinclude MatrixBase_set.out

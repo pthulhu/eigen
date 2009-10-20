@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2009 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -201,8 +201,13 @@ protected:
 
 public:
 
-  /** Default constructor without initialization of the coefficients. */
-  inline Transform() { }
+  /** Default constructor without initialization of the meaningfull coefficients.
+    * If Mode==Affine, then the last row is set to [0 ... 0 1] */
+  inline Transform()
+  {
+    if (int(Mode)==Affine)
+      makeAffine();
+  }
 
   inline Transform(const Transform& other)
   {
@@ -221,14 +226,14 @@ public:
 
   /** Constructs and initializes a transformation from a Dim^2 or a (Dim+1)^2 matrix. */
   template<typename OtherDerived>
-  inline explicit Transform(const MatrixBase<OtherDerived>& other)
+  inline explicit Transform(const AnyMatrixBase<OtherDerived>& other)
   {
     ei_transform_construct_from_matrix<OtherDerived,Mode,Dim,HDim>::run(this, other.derived());
   }
 
   /** Set \c *this from a Dim^2 or (Dim+1)^2 matrix. */
   template<typename OtherDerived>
-  inline Transform& operator=(const MatrixBase<OtherDerived>& other)
+  inline Transform& operator=(const AnyMatrixBase<OtherDerived>& other)
   {
     ei_transform_construct_from_matrix<OtherDerived,Mode,Dim,HDim>::run(this, other.derived());
     return *this;
@@ -242,14 +247,14 @@ public:
     ei_transform_construct_from_matrix<OtherMatrixType,Mode,Dim,HDim>::run(this, other.matrix());
   }
 
-  template<typename OtherDerived,typename OtherEvalType>
-  Transform(const ReturnByValue<OtherDerived,OtherEvalType>& other)
+  template<typename OtherDerived>
+  Transform(const ReturnByValue<OtherDerived>& other)
   {
     other.evalTo(*this);
   }
 
-  template<typename OtherDerived,typename OtherEvalType>
-  Transform& operator=(const ReturnByValue<OtherDerived,OtherEvalType>& other)
+  template<typename OtherDerived>
+  Transform& operator=(const ReturnByValue<OtherDerived>& other)
   {
     other.evalTo(*this);
     return *this;
@@ -305,7 +310,7 @@ public:
   // note: this function is defined here because some compilers cannot find the respective declaration
   template<typename OtherDerived>
   inline const typename ei_transform_right_product_impl<OtherDerived,Mode,_Dim,_Dim+1>::ResultType
-  operator * (const MatrixBase<OtherDerived> &other) const
+  operator * (const AnyMatrixBase<OtherDerived> &other) const
   { return ei_transform_right_product_impl<OtherDerived,Mode,Dim,HDim>::run(*this,other.derived()); }
 
   /** \returns the product expression of a transformation matrix \a a times a transform \a b
@@ -317,11 +322,11 @@ public:
     */
   template<typename OtherDerived> friend
   inline const typename ei_transform_left_product_impl<OtherDerived,Mode,_Dim,_Dim+1>::ResultType
-  operator * (const MatrixBase<OtherDerived> &a, const Transform &b)
+  operator * (const AnyMatrixBase<OtherDerived> &a, const Transform &b)
   { return ei_transform_left_product_impl<OtherDerived,Mode,Dim,HDim>::run(a.derived(),b); }
 
   template<typename OtherDerived>
-  inline Transform& operator*=(const MatrixBase<OtherDerived>& other) { return *this = *this * other; }
+  inline Transform& operator*=(const AnyMatrixBase<OtherDerived>& other) { return *this = *this * other; }
 
   /** Contatenates two transformations */
   inline const Transform operator * (const Transform& other) const
@@ -340,6 +345,10 @@ public:
 
   /** \sa MatrixBase::setIdentity() */
   void setIdentity() { m_matrix.setIdentity(); }
+  static const typename MatrixType::IdentityReturnType Identity()
+  {
+    return MatrixType::Identity();
+  }
 
   template<typename OtherDerived>
   inline Transform& scale(const MatrixBase<OtherDerived> &other);
@@ -390,7 +399,7 @@ public:
   Transform& fromPositionOrientationScale(const MatrixBase<PositionDerived> &position,
     const OrientationType& orientation, const MatrixBase<ScaleDerived> &scale);
 
-  inline const MatrixType inverse(TransformTraits traits = (TransformTraits)Mode) const;
+  inline Transform inverse(TransformTraits traits = (TransformTraits)Mode) const;
 
   /** \returns a const pointer to the column major internal matrix */
   const Scalar* data() const { return m_matrix.data(); }
@@ -454,6 +463,11 @@ public:
     */
   inline const Block<MatrixType,int(Mode)==int(Projective)?HDim:Dim,1> translationExt() const
   { return m_matrix.template block<int(Mode)==int(Projective)?HDim:Dim,1>(0,Dim); }
+
+
+  #ifdef EIGEN_TRANSFORM_PLUGIN
+  #include EIGEN_TRANSFORM_PLUGIN
+  #endif
 
 };
 
@@ -532,9 +546,9 @@ template<typename Scalar, int Dim, int Mode>
 QMatrix Transform<Scalar,Dim,Mode>::toQMatrix(void) const
 {
   EIGEN_STATIC_ASSERT(Dim==2, YOU_MADE_A_PROGRAMMING_MISTAKE)
-  return QMatrix(other.coeffRef(0,0), other.coeffRef(1,0),
-                 other.coeffRef(0,1), other.coeffRef(1,1),
-                 other.coeffRef(0,2), other.coeffRef(1,2));
+  return QMatrix(matrix.coeff(0,0), matrix.coeff(1,0),
+                 matrix.coeff(0,1), matrix.coeff(1,1),
+                 matrix.coeff(0,2), matrix.coeff(1,2));
 }
 
 /** Initialises \c *this from a QTransform assuming the dimension is 2.
@@ -566,12 +580,12 @@ Transform<Scalar,Dim,Mode>& Transform<Scalar,Dim,Mode>::operator=(const QTransfo
   * This function is available only if the token EIGEN_QT_SUPPORT is defined.
   */
 template<typename Scalar, int Dim, int Mode>
-QMatrix Transform<Scalar,Dim,Mode>::toQTransform(void) const
+QTransform Transform<Scalar,Dim,Mode>::toQTransform(void) const
 {
   EIGEN_STATIC_ASSERT(Dim==2, YOU_MADE_A_PROGRAMMING_MISTAKE)
-  return QTransform(other.coeffRef(0,0), other.coeffRef(1,0), other.coeffRef(2,0)
-                    other.coeffRef(0,1), other.coeffRef(1,1), other.coeffRef(2,1)
-                    other.coeffRef(0,2), other.coeffRef(1,2), other.coeffRef(2,2);
+  return QTransform(matrix.coeff(0,0), matrix.coeff(1,0), matrix.coeff(2,0)
+                    matrix.coeff(0,1), matrix.coeff(1,1), matrix.coeff(2,1)
+                    matrix.coeff(0,2), matrix.coeff(1,2), matrix.coeff(2,2);
 }
 #endif
 
@@ -864,7 +878,7 @@ Transform<Scalar,Dim,Mode>::fromPositionOrientationScale(const MatrixBase<Positi
 
 /** \nonstableyet
   *
-  * \returns the inverse transformation matrix according to some given knowledge
+  * \returns the inverse transformation according to some given knowledge
   * on \c *this.
   *
   * \param traits allows to optimize the inversion process when the transformion
@@ -882,34 +896,37 @@ Transform<Scalar,Dim,Mode>::fromPositionOrientationScale(const MatrixBase<Positi
   * \sa MatrixBase::inverse()
   */
 template<typename Scalar, int Dim, int Mode>
-const typename Transform<Scalar,Dim,Mode>::MatrixType
+Transform<Scalar,Dim,Mode>
 Transform<Scalar,Dim,Mode>::inverse(TransformTraits hint) const
 {
+  Transform res;
   if (hint == Projective)
   {
-    return m_matrix.inverse();
+    res.matrix() = m_matrix.inverse();
   }
   else
   {
-    MatrixType res;
     if (hint == Isometry)
     {
-      res.template corner<Dim,Dim>(TopLeft) = linear().transpose();
+      res.matrix().template corner<Dim,Dim>(TopLeft) = linear().transpose();
     }
     else if(hint&Affine)
     {
-      res.template corner<Dim,Dim>(TopLeft) = linear().inverse();
+      res.matrix().template corner<Dim,Dim>(TopLeft) = linear().inverse();
     }
     else
     {
       ei_assert(false && "Invalid transform traits in Transform::Inverse");
     }
     // translation and remaining parts
-    res.template corner<Dim,1>(TopRight) = - res.template corner<Dim,Dim>(TopLeft) * translation();
-    res.template corner<1,Dim>(BottomLeft).setZero();
-    res.coeffRef(Dim,Dim) = Scalar(1);
-    return res;
+    res.matrix().template corner<Dim,1>(TopRight) = - res.matrix().template corner<Dim,Dim>(TopLeft) * translation();
+    if(int(Mode)!=int(AffineCompact))
+    {
+      res.matrix().template block<1,Dim>(Dim,0).setZero();
+      res.matrix().coeffRef(Dim,Dim) = 1;
+    }
   }
+  return res;
 }
 
 /*****************************************************
@@ -939,7 +956,7 @@ struct ei_transform_take_affine_part<Transform<Scalar,Dim,AffineCompact> > {
 template<typename Other, int Mode, int Dim, int HDim>
 struct ei_transform_construct_from_matrix<Other, Mode,Dim,HDim, Dim,Dim>
 {
-  static inline void run(Transform<typename ei_traits<Other>::Scalar,Dim,Mode> *transform, const Other& other)
+  static inline void run(Transform<typename Other::Scalar,Dim,Mode> *transform, const Other& other)
   {
     transform->linear() = other;
     transform->translation().setZero();
@@ -950,7 +967,7 @@ struct ei_transform_construct_from_matrix<Other, Mode,Dim,HDim, Dim,Dim>
 template<typename Other, int Mode, int Dim, int HDim>
 struct ei_transform_construct_from_matrix<Other, Mode,Dim,HDim, Dim,HDim>
 {
-  static inline void run(Transform<typename ei_traits<Other>::Scalar,Dim,Mode> *transform, const Other& other)
+  static inline void run(Transform<typename Other::Scalar,Dim,Mode> *transform, const Other& other)
   {
     transform->affine() = other;
     transform->makeAffine();
@@ -960,20 +977,32 @@ struct ei_transform_construct_from_matrix<Other, Mode,Dim,HDim, Dim,HDim>
 template<typename Other, int Mode, int Dim, int HDim>
 struct ei_transform_construct_from_matrix<Other, Mode,Dim,HDim, HDim,HDim>
 {
-  static inline void run(Transform<typename ei_traits<Other>::Scalar,Dim,Mode> *transform, const Other& other)
+  static inline void run(Transform<typename Other::Scalar,Dim,Mode> *transform, const Other& other)
   { transform->matrix() = other; }
 };
 
 template<typename Other, int Dim, int HDim>
 struct ei_transform_construct_from_matrix<Other, AffineCompact,Dim,HDim, HDim,HDim>
 {
-  static inline void run(Transform<typename ei_traits<Other>::Scalar,Dim,AffineCompact> *transform, const Other& other)
+  static inline void run(Transform<typename Other::Scalar,Dim,AffineCompact> *transform, const Other& other)
   { transform->matrix() = other.template block<Dim,HDim>(0,0); }
 };
 
-/*****************************************************
-*** Specializations of operator* with a MatrixBase ***
-*****************************************************/
+/*********************************************************
+*** Specializations of operator* with a AnyMatrixBase ***
+*********************************************************/
+
+// ei_general_product_return_type is a generalization of ProductReturnType, for all types (including e.g. DiagonalBase...),
+// instead of being restricted to MatrixBase.
+template<typename Lhs, typename Rhs> struct ei_general_product_return_type;
+template<typename D1, typename D2> struct ei_general_product_return_type<MatrixBase<D1>, MatrixBase<D2> >
+ : ProductReturnType<D1,D2> {};
+template<typename Lhs, typename D2> struct ei_general_product_return_type<Lhs, MatrixBase<D2> >
+{ typedef D2 Type; };
+template<typename D1, typename Rhs> struct ei_general_product_return_type<MatrixBase<D1>, Rhs >
+{ typedef D1 Type; };
+
+
 
 // Projective * set of homogeneous column vectors
 template<typename Other, int Dim, int HDim>
@@ -1015,6 +1044,17 @@ struct ei_transform_right_product_impl<Other,Mode, Dim,HDim, Dim,1>
   typedef Matrix<typename Other::Scalar,Dim,1> ResultType;
   static ResultType run(const TransformType& tr, const Other& other)
   { return tr.linear() * other + tr.translation(); }
+};
+
+// Affine *  set of column vectors
+// FIXME use a ReturnByValue to remove the temporary
+template<typename Other, int Mode, int Dim, int HDim>
+struct ei_transform_right_product_impl<Other,Mode, Dim,HDim, Dim,Dynamic>
+{
+  typedef Transform<typename Other::Scalar,Dim,Mode> TransformType;
+  typedef Matrix<typename Other::Scalar,Dim,Dynamic> ResultType;
+  static ResultType run(const TransformType& tr, const Other& other)
+  { return (tr.linear() * other).colwise() + tr.translation(); }
 };
 
 // Affine *  homogeneous column vector

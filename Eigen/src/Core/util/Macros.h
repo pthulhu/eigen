@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -29,19 +29,30 @@
 #undef minor
 
 #define EIGEN_WORLD_VERSION 2
-#define EIGEN_MAJOR_VERSION 0
-#define EIGEN_MINOR_VERSION 52
+#define EIGEN_MAJOR_VERSION 90
+#define EIGEN_MINOR_VERSION 0
 
 #define EIGEN_VERSION_AT_LEAST(x,y,z) (EIGEN_WORLD_VERSION>x || (EIGEN_WORLD_VERSION>=x && \
                                       (EIGEN_MAJOR_VERSION>y || (EIGEN_MAJOR_VERSION>=y && \
                                                                  EIGEN_MINOR_VERSION>=z))))
 
-// if the compiler is GNUC, disable 16 byte alignment on exotic archs that probably don't need it, and on which
-// it may be extra trouble to get aligned memory allocation to work (example: on ARM, overloading new[] is a PITA
-// because extra memory must be allocated for bookkeeping).
-// if the compiler is not GNUC, just cross fingers that the architecture isn't too exotic, because we don't want
-// to keep track of all the different preprocessor symbols for all compilers.
-#if (!defined(__GNUC__)) || defined(__i386__) || defined(__x86_64__) || defined(__powerpc__) || defined(__ia64__)
+// 16 byte alignment is only useful for vectorization. Since it affects the ABI, we need to enable 16 byte alignment on all
+// platforms where vectorization might be enabled. In theory we could always enable alignment, but it can be a cause of problems
+// on some platforms, so we just disable it in certain common platform (compiler+architecture combinations) to avoid these problems.
+#if defined(__GNUC__) && !(defined(__i386__) || defined(__x86_64__) || defined(__powerpc__) || defined(__ia64__))
+#define EIGEN_GCC_AND_ARCH_DOESNT_WANT_ALIGNMENT 1
+#else
+#define EIGEN_GCC_AND_ARCH_DOESNT_WANT_ALIGNMENT 0
+#endif
+
+#if defined(__GNUC__) && (__GNUC__ <= 3)
+#define EIGEN_GCC3_OR_OLDER 1
+#else
+#define EIGEN_GCC3_OR_OLDER 0
+#endif
+
+// FIXME vectorization + alignment is completely disabled with sun studio
+#if !EIGEN_GCC_AND_ARCH_DOESNT_WANT_ALIGNMENT && !EIGEN_GCC3_OR_OLDER && !defined(__SUNPRO_CC)
   #define EIGEN_ARCH_WANTS_ALIGNMENT 1
 #else
   #define EIGEN_ARCH_WANTS_ALIGNMENT 0
@@ -54,7 +65,7 @@
 #else
   #define EIGEN_ALIGN 0
   #ifdef EIGEN_VECTORIZE
-    #error Vectorization enabled, but the architecture is not listed among those for which we require 16 byte alignment. If you added vectorization for another architecture, you also need to edit this list.
+    #error "Vectorization enabled, but our platform checks say that we don't do 16 byte alignment on this platform. If you added vectorization for another architecture, you also need to edit this platform check."
   #endif
   #ifndef EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
     #define EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
@@ -84,14 +95,23 @@
 #define EIGEN_TUNE_FOR_CPU_CACHE_SIZE (sizeof(float)*256*256)
 #endif
 
+/** Defines the maximal width of the blocks used in the triangular product and solver
+  * for vectors (level 2 blas xTRMV and xTRSV). The default is 8.
+  */
+#ifndef EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH
+#define EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH 8
+#endif
+
 /** Allows to disable some optimizations which might affect the accuracy of the result.
   * Such optimization are enabled by default, and set EIGEN_FAST_MATH to 0 to disable them.
   * They currently include:
-  *   - single precision Cwise::sin() and Cwise::cos() when SSE vectorization is enabled. 
+  *   - single precision Cwise::sin() and Cwise::cos() when SSE vectorization is enabled.
   */
 #ifndef EIGEN_FAST_MATH
 #define EIGEN_FAST_MATH 1
 #endif
+
+#define EIGEN_DEBUG_VAR(x) std::cerr << #x << " = " << x << std::endl;
 
 #define USING_PART_OF_NAMESPACE_EIGEN \
 EIGEN_USING_MATRIX_TYPEDEFS \
@@ -182,23 +202,34 @@ using Eigen::ei_cos;
 #define EIGEN_ASM_COMMENT(X)
 #endif
 
-/* EIGEN_ALIGN_128 forces data to be 16-byte aligned, EVEN if vectorization (EIGEN_VECTORIZE) is disabled,
+/* EIGEN_ALIGN_TO_BOUNDARY(n) forces data to be n-byte aligned. This is used to satisfy SIMD requirements.
+ * However, we do that EVEN if vectorization (EIGEN_VECTORIZE) is disabled,
  * so that vectorization doesn't affect binary compatibility.
  *
  * If we made alignment depend on whether or not EIGEN_VECTORIZE is defined, it would be impossible to link
  * vectorized and non-vectorized code.
  */
 #if !EIGEN_ALIGN
-#define EIGEN_ALIGN_128
+  #define EIGEN_ALIGN_TO_BOUNDARY(n)
 #elif (defined __GNUC__)
-#define EIGEN_ALIGN_128 __attribute__((aligned(16)))
+  #define EIGEN_ALIGN_TO_BOUNDARY(n) __attribute__((aligned(n)))
 #elif (defined _MSC_VER)
-#define EIGEN_ALIGN_128 __declspec(align(16))
+  #define EIGEN_ALIGN_TO_BOUNDARY(n) __declspec(align(n))
+#elif (defined __SUNPRO_CC)
+  // FIXME not sure about this one:
+  #define EIGEN_ALIGN_TO_BOUNDARY(n) __attribute__((aligned(n)))
 #else
-#error Please tell me what is the equivalent of __attribute__((aligned(16))) for your compiler
+  #error Please tell me what is the equivalent of __attribute__((aligned(n))) for your compiler
 #endif
 
-#define EIGEN_RESTRICT __restrict
+#define EIGEN_ALIGN16 EIGEN_ALIGN_TO_BOUNDARY(16)
+
+#ifdef EIGEN_DONT_USE_RESTRICT_KEYWORD
+  #define EIGEN_RESTRICT
+#endif
+#ifndef EIGEN_RESTRICT
+  #define EIGEN_RESTRICT __restrict
+#endif
 
 #ifndef EIGEN_STACK_ALLOCATION_LIMIT
 #define EIGEN_STACK_ALLOCATION_LIMIT 1000000
@@ -221,32 +252,34 @@ using Eigen::ei_cos;
 
 // format used in Eigen's documentation
 // needed to define it here as escaping characters in CMake add_definition's argument seems very problematic.
-#define EIGEN_DOCS_IO_FORMAT IOFormat(3, AlignCols, " ", "\n", "", "")
+#define EIGEN_DOCS_IO_FORMAT IOFormat(3, 0, " ", "\n", "", "")
 
-#define EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, Op) \
-template<typename OtherDerived> \
-EIGEN_STRONG_INLINE Derived& operator Op(const Eigen::MatrixBase<OtherDerived>& other) \
-{ \
-  return Base::operator Op(other.derived()); \
-} \
-EIGEN_STRONG_INLINE Derived& operator Op(const Derived& other) \
-{ \
-  return Base::operator Op(other); \
-}
+// C++0x features
+#if defined(__GXX_EXPERIMENTAL_CXX0X__) || (defined(_MSC_VER) && (_MSC_VER >= 1600))
+  #define EIGEN_REF_TO_TEMPORARY &&
+#else
+  #define EIGEN_REF_TO_TEMPORARY const &
+#endif
 
-#define EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, Op) \
-template<typename Other> \
-EIGEN_STRONG_INLINE Derived& operator Op(const Other& scalar) \
-{ \
-  return Base::operator Op(scalar); \
-}
-
+#ifdef _MSC_VER
 #define EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Derived) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, =) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, +=) \
-EIGEN_INHERIT_ASSIGNMENT_OPERATOR(Derived, -=) \
-EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, *=) \
-EIGEN_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(Derived, /=)
+using Base::operator =; \
+using Base::operator +=; \
+using Base::operator -=; \
+using Base::operator *=; \
+using Base::operator /=;
+#else
+#define EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Derived) \
+using Base::operator =; \
+using Base::operator +=; \
+using Base::operator -=; \
+using Base::operator *=; \
+using Base::operator /=; \
+EIGEN_STRONG_INLINE Derived& operator=(const Derived& other) \
+{ \
+  return Base::operator=(other); \
+}
+#endif
 
 #define _EIGEN_GENERIC_PUBLIC_INTERFACE(Derived, BaseClass) \
 typedef BaseClass Base; \
@@ -269,6 +302,10 @@ enum { RowsAtCompileTime = Eigen::ei_traits<Derived>::RowsAtCompileTime, \
 _EIGEN_GENERIC_PUBLIC_INTERFACE(Derived, Eigen::MatrixBase<Derived>)
 
 #define EIGEN_ENUM_MIN(a,b) (((int)a <= (int)b) ? (int)a : (int)b)
+#define EIGEN_SIZE_MIN(a,b) (((int)a == 1 || (int)b == 1) ? 1 \
+                           : ((int)a == Dynamic || (int)b == Dynamic) ? Dynamic \
+                           : ((int)a <= (int)b) ? (int)a : (int)b)
 #define EIGEN_ENUM_MAX(a,b) (((int)a >= (int)b) ? (int)a : (int)b)
+#define EIGEN_LOGICAL_XOR(a,b) (((a) || (b)) && !((a) && (b)))
 
 #endif // EIGEN_MACROS_H

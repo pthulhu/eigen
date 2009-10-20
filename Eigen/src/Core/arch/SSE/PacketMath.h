@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -26,7 +26,7 @@
 #define EIGEN_PACKET_MATH_SSE_H
 
 #ifndef EIGEN_CACHEFRIENDLY_PRODUCT_THRESHOLD
-#define EIGEN_CACHEFRIENDLY_PRODUCT_THRESHOLD 16
+#define EIGEN_CACHEFRIENDLY_PRODUCT_THRESHOLD 8
 #endif
 
 typedef __m128  Packet4f;
@@ -44,7 +44,7 @@ typedef __m128d Packet2d;
 
 #define ei_vec4i_swizzle2(a,b,p,q,r,s) \
   (_mm_castps_si128( (_mm_shuffle_ps( _mm_castsi128_ps(a), _mm_castsi128_ps(b), ((s)<<6|(r)<<4|(q)<<2|(p))))))
-  
+
 #define _EIGEN_DECLARE_CONST_Packet4f(NAME,X) \
   const Packet4f ei_p4f_##NAME = ei_pset1<float>(X)
 
@@ -74,8 +74,21 @@ template<> struct ei_unpacket_traits<Packet4f> { typedef float  type; enum {size
 template<> struct ei_unpacket_traits<Packet2d> { typedef double type; enum {size=2}; };
 template<> struct ei_unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; };
 
+#ifdef __GNUC__
+// Sometimes GCC implements _mm_set1_p* using multiple moves,
+// that is inefficient :( (e.g., see ei_gemm_pack_rhs)
+template<> EIGEN_STRONG_INLINE Packet4f ei_pset1<float>(const float&  from) {
+  Packet4f res = _mm_set_ss(from);
+  return _mm_shuffle_ps(res,res,0);
+}
+template<> EIGEN_STRONG_INLINE Packet2d ei_pset1<double>(const double&  from) {
+  Packet2d res = _mm_set_sd(from);
+  return _mm_unpacklo_pd(res,res);
+}
+#else
 template<> EIGEN_STRONG_INLINE Packet4f ei_pset1<float>(const float&  from) { return _mm_set1_ps(from); }
 template<> EIGEN_STRONG_INLINE Packet2d ei_pset1<double>(const double& from) { return _mm_set1_pd(from); }
+#endif
 template<> EIGEN_STRONG_INLINE Packet4i ei_pset1<int>(const int&    from) { return _mm_set1_epi32(from); }
 
 template<> EIGEN_STRONG_INLINE Packet4f ei_padd<Packet4f>(const Packet4f& a, const Packet4f& b) { return _mm_add_ps(a,b); }
@@ -163,14 +176,38 @@ template<> EIGEN_STRONG_INLINE Packet4f ei_pload<float>(const float*    from) { 
 template<> EIGEN_STRONG_INLINE Packet2d ei_pload<double>(const double*  from) { return _mm_load_pd(from); }
 template<> EIGEN_STRONG_INLINE Packet4i ei_pload<int>(const int* from) { return _mm_load_si128(reinterpret_cast<const Packet4i*>(from)); }
 
-template<> EIGEN_STRONG_INLINE Packet4f ei_ploadu(const float*   from) {
-  Packet4f r;
-  r = _mm_castpd_ps(_mm_load_sd((double*)(from)));
-  r = _mm_loadh_pi(r, (const __m64*)(from+2));
-  return r;
+#if (!defined __GNUC__) && (!defined __ICC)
+template<> EIGEN_STRONG_INLINE Packet4f ei_ploadu(const float*   from) { return _mm_loadu_ps(from); }
+template<> EIGEN_STRONG_INLINE Packet2d ei_ploadu<double>(const double*  from) { return _mm_loadu_pd(from); }
+template<> EIGEN_STRONG_INLINE Packet4i ei_ploadu<int>(const int* from) { return _mm_loadu_si128(reinterpret_cast<const Packet4i*>(from)); }
+#else
+// Fast unaligned loads. Note that here we cannot directly use intrinsics: this would
+// require pointer casting to incompatible pointer types and leads to invalid code
+// because of the strict aliasing rule. The "dummy" stuff are required to enforce
+// a correct instruction dependency.
+// TODO: do the same for MSVC (ICC is compatible)
+template<> EIGEN_STRONG_INLINE Packet4f ei_ploadu(const float* from)
+{
+  __m128 res;
+  asm volatile ("movsd  %[from0], %[r]" : [r] "=x" (res) : [from0] "m" (*from), [dummy] "m" (*(from+1)) );
+  asm volatile ("movhps %[from2], %[r]" : [r] "+x" (res) : [from2] "m" (*(from+2)), [dummy] "m" (*(from+3)) );
+  return res;
 }
-template<> EIGEN_STRONG_INLINE Packet2d ei_ploadu<double>(const double*  from) { return _mm_castps_pd(ei_ploadu((const float*)(from))); }
-template<> EIGEN_STRONG_INLINE Packet4i ei_ploadu<int>(const int* from) { return _mm_castpd_si128(ei_ploadu((const double*)(from))); }
+template<> EIGEN_STRONG_INLINE Packet2d ei_ploadu(const double* from)
+{
+  __m128d res;
+  asm volatile ("movsd  %[from0], %[r]" : [r] "=x" (res) : [from0] "m" (*from) );
+  asm volatile ("movhpd %[from1], %[r]" : [r] "+x" (res) : [from1] "m" (*(from+1)) );
+  return res;
+}
+template<> EIGEN_STRONG_INLINE Packet4i ei_ploadu(const int* from)
+{
+  __m128i res;
+  asm volatile ("movsd  %[from0], %[r]" : [r] "=x" (res) : [from0] "m" (*from), [dummy] "m" (*(from+1)) );
+  asm volatile ("movhps %[from2], %[r]" : [r] "+x" (res) : [from2] "m" (*(from+2)), [dummy] "m" (*(from+3)) );
+  return res;
+}
+#endif
 
 template<> EIGEN_STRONG_INLINE void ei_pstore<float>(float*   to, const Packet4f& from) { _mm_store_ps(to, from); }
 template<> EIGEN_STRONG_INLINE void ei_pstore<double>(double* to, const Packet2d& from) { _mm_store_pd(to, from); }
@@ -322,7 +359,7 @@ template<> EIGEN_STRONG_INLINE int ei_predux_mul<Packet4i>(const Packet4i& a)
   // after some experiments, it is seems this is the fastest way to implement it
   // for GCC (eg., reusing ei_pmul is very slow !)
   // TODO try to call _mm_mul_epu32 directly
-  EIGEN_ALIGN_128 int aux[4];
+  EIGEN_ALIGN16 int aux[4];
   ei_pstore(aux, a);
   return  (aux[0] * aux[1]) * (aux[2] * aux[3]);;
 }
@@ -341,7 +378,7 @@ template<> EIGEN_STRONG_INLINE int ei_predux_min<Packet4i>(const Packet4i& a)
 {
   // after some experiments, it is seems this is the fastest way to implement it
   // for GCC (eg., it does not like using std::min after the ei_pstore !!)
-  EIGEN_ALIGN_128 int aux[4];
+  EIGEN_ALIGN16 int aux[4];
   ei_pstore(aux, a);
   register int aux0 = aux[0]<aux[1] ? aux[0] : aux[1];
   register int aux2 = aux[2]<aux[3] ? aux[2] : aux[3];
@@ -362,7 +399,7 @@ template<> EIGEN_STRONG_INLINE int ei_predux_max<Packet4i>(const Packet4i& a)
 {
   // after some experiments, it is seems this is the fastest way to implement it
   // for GCC (eg., it does not like using std::min after the ei_pstore !!)
-  EIGEN_ALIGN_128 int aux[4];
+  EIGEN_ALIGN16 int aux[4];
   ei_pstore(aux, a);
   register int aux0 = aux[0]>aux[1] ? aux[0] : aux[1];
   register int aux2 = aux[2]>aux[3] ? aux[2] : aux[3];

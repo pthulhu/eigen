@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
@@ -62,15 +62,29 @@ template<typename Derived> class MapBase
     inline int rows() const { return m_rows.value(); }
     inline int cols() const { return m_cols.value(); }
 
+    /** Returns the leading dimension (for matrices) or the increment (for vectors) to be used with data().
+      *
+      * More precisely:
+      *  - for a column major matrix it returns the number of elements between two successive columns
+      *  - for a row major matrix it returns the number of elements between two successive rows
+      *  - for a vector it returns the number of elements between two successive coefficients
+      * This function has to be used together with the MapBase::data() function.
+      *
+      * \sa MapBase::data() */
     inline int stride() const { return derived().stride(); }
+
+    /** Returns a pointer to the first coefficient of the matrix or vector.
+      * This function has to be used together with the stride() function.
+      *
+      * \sa MapBase::stride() */
     inline const Scalar* data() const { return m_data; }
 
     template<bool IsForceAligned,typename Dummy> struct force_aligned_impl {
-      AlignedDerivedType static run(MapBase& a) { return a.derived(); }
+      static AlignedDerivedType run(MapBase& a) { return a.derived(); }
     };
 
     template<typename Dummy> struct force_aligned_impl<false,Dummy> {
-      AlignedDerivedType static run(MapBase& a) { return a.derived()._convertToForceAligned(); }
+      static AlignedDerivedType run(MapBase& a) { return a.derived()._convertToForceAligned(); }
     };
 
     /** \returns an expression equivalent to \c *this but having the \c PacketAccess constant
@@ -154,16 +168,16 @@ template<typename Derived> class MapBase
               m_cols(ColsAtCompileTime == Dynamic ? size : ColsAtCompileTime)
     {
       EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-      ei_assert(size > 0 || data == 0);
-      ei_assert(SizeAtCompileTime == Dynamic || SizeAtCompileTime == size);
+      ei_assert(size >= 0);
+      ei_assert(data == 0 || SizeAtCompileTime == Dynamic || SizeAtCompileTime == size);
     }
 
     inline MapBase(const Scalar* data, int rows, int cols)
             : m_data(data), m_rows(rows), m_cols(cols)
     {
       ei_assert( (data == 0)
-              || (   rows > 0 && (RowsAtCompileTime == Dynamic || RowsAtCompileTime == rows)
-                  && cols > 0 && (ColsAtCompileTime == Dynamic || ColsAtCompileTime == cols)));
+              || (   rows >= 0 && (RowsAtCompileTime == Dynamic || RowsAtCompileTime == rows)
+                  && cols >= 0 && (ColsAtCompileTime == Dynamic || ColsAtCompileTime == cols)));
     }
 
     Derived& operator=(const MapBase& other)
@@ -171,13 +185,20 @@ template<typename Derived> class MapBase
       return Base::operator=(other);
     }
 
-    template<typename OtherDerived>
-    Derived& operator=(const MatrixBase<OtherDerived>& other)
-    {
-      return Base::operator=(other);
-    }
-
+    using Base::operator=;
     using Base::operator*=;
+
+    // FIXME it seems VS does not allow to do "using Base::operator+="
+    // and to overload operator+= at the same time, therefore we have to
+    // explicitly add these two overloads.
+    // Maybe there exists a better solution though.
+    template<typename ProductDerived, typename Lhs,typename Rhs>
+    Derived& operator+=(const Flagged<ProductBase<ProductDerived,Lhs,Rhs>, 0, EvalBeforeAssigningBit>& other)
+    { return Base::operator+=(other); }
+
+    template<typename ProductDerived, typename Lhs,typename Rhs>
+    Derived& operator-=(const Flagged<ProductBase<ProductDerived,Lhs,Rhs>, 0, EvalBeforeAssigningBit>& other)
+    { return Base::operator-=(other); }
 
     template<typename OtherDerived>
     Derived& operator+=(const MatrixBase<OtherDerived>& other)

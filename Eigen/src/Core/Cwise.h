@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -178,6 +178,9 @@ template<typename ExpressionType> class Cwise
 
   protected:
     ExpressionTypeNested m_matrix;
+
+  private:
+    Cwise& operator=(const Cwise&);
 };
 
 /** \returns a Cwise wrapper of *this providing additional coefficient-wise operations

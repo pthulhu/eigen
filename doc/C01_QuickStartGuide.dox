@@ -1,6 +1,6 @@
 namespace Eigen {
 
-/** \page TutorialCore Tutorial 1/3 - Core features
+/** \page TutorialCore Tutorial 1/4 - Core features
     \ingroup Tutorial
 
 <div class="eimainmenu">\ref index "Overview"
@@ -24,6 +24,7 @@ namespace Eigen {
   - \ref TutorialCoreTransposeAdjoint
   - \ref TutorialCoreDotNorm
   - \ref TutorialCoreTriangularMatrix
+  - \ref TutorialCoreSelfadjointMatrix
   - \ref TutorialCoreSpecialTopics
 \n
 
@@ -40,9 +41,6 @@ Here are some quick compilation instructions with GCC. To quickly test an exampl
 There is no library to link to. For good performance, add the \c -O2 compile-flag. Note however that this makes it impossible to debug inside Eigen code, as many functions get inlined. In some cases, performance can be further improved by disabling Eigen assertions: use \c -DEIGEN_NO_DEBUG or \c -DNDEBUG to disable them.
 
 On the x86 architecture, the SSE2 instruction set is not enabled by default. Use \c -msse2 to enable it, and Eigen will then automatically enable its vectorized paths. On x86-64 and AltiVec-based architectures, vectorization is enabled by default.
-
-<a name="warningarraymodule"></a>
-\warning \redstar In most cases it is enough to include the \c Eigen/Core header only to get started with Eigen. However, some features presented in this tutorial require the Array module to be included (\c \#include \c <Eigen/Array>). Those features are highlighted with a red star \redstar.
 
 \section TutorialCoreSimpleExampleFixedSize Simple example with fixed-size matrices and vectors
 
@@ -68,9 +66,12 @@ output:
 \include Tutorial_simple_example_dynamic_size.out
 </td></tr></table>
 
-
-
-
+<a name="warningarraymodule"></a>
+\warning \redstar In most cases it is enough to include the \c Eigen/Core header only to get started with Eigen. However, some features presented in this tutorial require the Array module to be included (\c \#include \c <Eigen/Array>). Those features are highlighted with a red star \redstar. Notice that if you want to include all Eigen functionality at once, you can do:
+\code
+#include <Eigen/Eigen>
+\endcode
+This slows compilation down but at least you don't have to worry anymore about including the correct files! There also is the Eigen/Dense header including all dense functionality i.e. leaving out the Sparse module.
 
 
 <a href="#" class="top">top</a>\section TutorialCoreMatrixTypes Matrix and vector types
@@ -88,6 +89,17 @@ For example, \c Vector3d is a typedef for \code Matrix<double, 3, 1> \endcode
 
 For dynamic-size, that is in order to left the number of rows or of columns unspecified at compile-time, use the special value Eigen::Dynamic. For example, \c VectorXd is a typedef for \code Matrix<double, Dynamic, 1> \endcode
 
+All combinations are allowed: you can have a matrix with a fixed number of rows and a dynamic number of columns, etc. The following are all valid:
+
+\code
+Matrix<double, 6, Dynamic> // Dynamic number of columns
+Matrix<double, Dynamic, 2> // Dynamic number of rows
+Matrix<double, Dynamic, Dynamic> // Fully dynamic
+Matrix<double, 13, 3> // Fully fixed
+\endcode
+
+Fixed-size and partially-dynamic-size matrices may use all the same API calls as fully dynamic
+matrices, but the fixed dimension(s) must remain constant, or an assertion failure will occur.
 
 <a href="#" class="top">top</a>\section TutorialCoreCoefficients Coefficient access
 
@@ -109,6 +121,48 @@ Notice that these coefficient access methods have assertions checking the ranges
 
 <a href="#" class="top">top</a>\section TutorialCoreMatrixInitialization Matrix and vector creation and initialization
 
+\subsection TutorialCtors Matrix constructors
+
+The default constructor leaves coefficients uninitialized. Any dynamic size is set to 0, in which case the matrix/vector is considered uninitialized (no array is allocated).
+
+\code
+Matrix3f A; // construct 3x3 matrix with uninitialized coefficients
+A(0,0) = 5; // OK
+MatrixXf B; // construct 0x0 matrix without allocating anything
+B(0,0) = 5; // Error, B is uninitialized, doesn't have any coefficients to address
+\endcode
+
+In the above example, B is an uninitialized matrix. What to do with such a matrix? You can call resize() on it, or you can assign another matrix to it. Like this:
+
+\code
+MatrixXf B; // uninitialized matrix
+B.resize(3,5); // OK, now B is a 3x5 matrix with uninitialized coefficients
+B(0,0) = 5; // OK
+MatrixXf C; // uninitialized matrix
+C = B; // OK, C is initialized as a copy of B
+\endcode
+
+There also are constructors taking size parameters, allowing to directly initialize dynamic-size matrices:
+
+\code
+MatrixXf B(3,5); // B is a 3x5 matrix with uninitialized coefficients
+\endcode
+
+Note that even if one of the dimensions is known at compile time, you must specify it. The only exception is vectors (i.e. matrices where one of the dimensions is known at compile time to be 1).
+
+\code
+VectorXf v(10); // OK, v is a vector of size 10 with uninitialized coefficients
+Matrix<float,2,Dynamic> m(10); // Error: m is not a vector, must provide explicitly the 2 sizes
+Matrix<float,2,Dynamic> m(2,10); // OK
+Matrix2f m(2,2); // OK. Of course it's redundant to pass the parameters here, but it's allowed.
+\endcode
+
+For small fixed-size vectors, we also allow constructors passing the coefficients:
+\code
+Vector2f u(1.2f, 3.4f);
+Vector3f v(1.2f, 3.4f, 5.6f);
+Vector4f w(1.2f, 3.4f, 5.6f, 7.8f);
+\endcode
 
 \subsection TutorialPredefMat Predefined Matrices
 Eigen offers several static methods to create special matrix expressions, and non-static methods to assign these expressions to existing matrices:
@@ -207,7 +261,7 @@ v = 6 6 6
 
 \subsection TutorialCasting Casting
 
-In Eigen, any matrices of same size and same scalar type are all naturally compatible. The scalar type can be explicitely casted to another one using the template MatrixBase::cast() function:
+In Eigen, any matrices of same size and same scalar type are all naturally compatible. The scalar type can be explicitly casted to another one using the template MatrixBase::cast() function:
 \code
 Matrix3d md(1,2,3);
 Matrix3f mf = md.cast<float>();
@@ -274,7 +328,7 @@ In short, all arithmetic operators can be used right away as in the following ex
 mat4 -= mat1*1.5 + mat2 * (mat3/4);
 \endcode
 which includes two matrix scalar products ("mat1*1.5" and "mat3/4"), a matrix-matrix product ("mat2 * (mat3/4)"),
-a matrix addition ("+") and substraction with assignment ("-=").
+a matrix addition ("+") and subtraction with assignment ("-=").
 
 <table class="tutorial_code">
 <tr><td>
@@ -410,7 +464,7 @@ mat = 2 7 8
 
 Also note that maxCoeff and minCoeff can takes optional arguments returning the coordinates of the respective min/max coeff: \link MatrixBase::maxCoeff(int*,int*) const maxCoeff(int* i, int* j) \endlink, \link MatrixBase::minCoeff(int*,int*) const minCoeff(int* i, int* j) \endlink.
 
-<span class="note">\b Side \b note: The all() and any() functions are especially useful in combinaison with coeff-wise comparison operators (\ref CwiseAll "example").</span>
+<span class="note">\b Side \b note: The all() and any() functions are especially useful in combination with coeff-wise comparison operators (\ref CwiseAll "example").</span>
 
 
 
@@ -524,35 +578,88 @@ vec1.normalize();\endcode
 
 <a href="#" class="top">top</a>\section TutorialCoreTriangularMatrix Dealing with triangular matrices
 
-Read/write access to special parts of a matrix can be achieved. See \link MatrixBase::part() const this \endlink for read access and \link MatrixBase::part() this \endlink for write access..
+Currently, Eigen does not provide any explicit triangular matrix, with storage class. Instead, we
+can reference a triangular part of a square matrix or expression to perform special treatment on it.
+This is achieved by the class TriangularView and the MatrixBase::triangularView template function.
+Note that the opposite triangular part of  the matrix is never referenced, and so it can, e.g., store
+a second triangular matrix.
 
 <table class="tutorial_code">
 <tr><td>
-Extract triangular matrices \n from a given matrix m:
+Reference a read/write triangular part of a given \n
+matrix (or expression) m with optional unit diagonal:
 </td><td>\code
-m.part<Eigen::UpperTriangular>()
-m.part<Eigen::StrictlyUpperTriangular>()
-m.part<Eigen::UnitUpperTriangular>()
-m.part<Eigen::LowerTriangular>()
-m.part<Eigen::StrictlyLowerTriangular>()
-m.part<Eigen::UnitLowerTriangular>()\endcode
+m.triangularView<Eigen::UpperTriangular>()
+m.triangularView<Eigen::UnitUpperTriangular>()
+m.triangularView<Eigen::LowerTriangular>()
+m.triangularView<Eigen::UnitLowerTriangular>()\endcode
 </td></tr>
 <tr><td>
-Write to triangular parts \n of a matrix m:
+Writing to a specific triangular part:\n (only the referenced triangular part is evaluated)
 </td><td>\code
-m1.part<Eigen::UpperTriangular>() = m2;
-m1.part<Eigen::StrictlyUpperTriangular>() = m2;
-m1.part<Eigen::LowerTriangular>() = m2;
-m1.part<Eigen::StrictlyLowerTriangular>() = m2;\endcode
+m1.triangularView<Eigen::LowerTriangular>() = m2 + m3 \endcode
 </td></tr>
 <tr><td>
-Special: take advantage of symmetry \n (selfadjointness) when copying \n an expression into a matrix
+Conversion to a dense matrix setting the opposite triangular part to zero:
 </td><td>\code
-m.part<Eigen::SelfAdjoint>() = someSelfadjointMatrix;
-m1.part<Eigen::SelfAdjoint>() = m2 + m2.adjoint(); // m2 + m2.adjoint() is selfadjoint \endcode
+m2 = m1.triangularView<Eigen::UnitUpperTriangular>()\endcode
 </td></tr>
+<tr><td>
+Products:
+</td><td>\code
+m3 += s1 * m1.adjoint().triangularView<Eigen::UnitUpperTriangular>() * m2
+m3 -= s1 * m2.conjugate() * m1.adjoint().triangularView<Eigen::LowerTriangular>() \endcode
+</td></tr>
+<tr><td>
+Solving linear equations:\n(\f$ m_2 := m_1^{-1} m_2 \f$)
+</td><td>\code
+m1.triangularView<Eigen::UnitLowerTriangular>().solveInPlace(m2)
+m1.adjoint().triangularView<Eigen::UpperTriangular>().solveInPlace(m2)\endcode
+</td></tr>
+</table>
 
 
+<a href="#" class="top">top</a>\section TutorialCoreSelfadjointMatrix Dealing with symmetric/selfadjoint matrices
+
+Just as for triangular matrix, you can reference any triangular part of a square matrix to see it a selfadjoint
+matrix to perform special and optimized operations. Again the opposite triangular is never referenced and can be
+used to store other information.
+
+<table class="tutorial_code">
+<tr><td>
+Conversion to a dense matrix:
+</td><td>\code
+m2 = m.selfadjointView<Eigen::LowerTriangular>();\endcode
+</td></tr>
+<tr><td>
+Product with another general matrix or vector:
+</td><td>\code
+m3  = s1 * m1.conjugate().selfadjointView<Eigen::UpperTriangular>() * m3;
+m3 -= s1 * m3.adjoint() * m1.selfadjointView<Eigen::UpperTriangular>();\endcode
+</td></tr>
+<tr><td>
+Rank 1 and rank K update:
+</td><td>\code
+// fast version of m1 += s1 * m2 * m2.adjoint():
+m1.selfadjointView<Eigen::UpperTriangular>().rankUpdate(m2,s1);
+// fast version of m1 -= m2.adjoint() * m2:
+m1.selfadjointView<Eigen::LowerTriangular>().rankUpdate(m2.adjoint(),-1); \endcode
+</td></tr>
+<tr><td>
+Rank 2 update: (\f$ m += s u v^* + s v u^* \f$)
+</td><td>\code
+m.selfadjointView<Eigen::UpperTriangular>().rankUpdate(u,v,s);
+\endcode
+</td></tr>
+<tr><td>
+Solving linear equations:\n(\f$ m_2 := m_1^{-1} m_2 \f$)
+</td><td>\code
+// via a standard Cholesky factorization
+m1.selfadjointView<Eigen::UpperTriangular>().llt().solveInPlace(m2);
+// via a Cholesky factorization with pivoting
+m1.selfadjointView<Eigen::UpperTriangular>().ldlt().solveInPlace(m2);
+\endcode
+</td></tr>
 </table>
 
 

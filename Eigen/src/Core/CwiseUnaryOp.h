@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -92,6 +92,13 @@ class CwiseUnaryOp : ei_no_assignment_operator,
       return m_functor.packetOp(m_matrix.template packet<LoadMode>(index));
     }
 
+    /** \internal used for introspection */
+    const UnaryOp& _functor() const { return m_functor; }
+
+    /** \internal used for introspection */
+    const typename ei_cleantype<typename MatrixType::Nested>::type&
+    _expression() const { return m_matrix; }
+
   protected:
     const typename MatrixType::Nested m_matrix;
     const UnaryOp m_functor;
@@ -101,8 +108,6 @@ class CwiseUnaryOp : ei_no_assignment_operator,
   *
   * The template parameter \a CustomUnaryOp is the type of the functor
   * of the custom unary operator.
-  *
-  * \addexample CustomCwiseUnaryFunctors \label How to use custom coeff wise unary functors
   *
   * Example:
   * \include class_CwiseUnaryOp.cpp
@@ -165,14 +170,14 @@ MatrixBase<Derived>::conjugate() const
   return ConjugateReturnType(derived());
 }
 
-/** \returns an expression of the real part of \c *this.
+/** \returns a read-only expression of the real part of \c *this.
   *
   * \sa imag() */
 template<typename Derived>
-EIGEN_STRONG_INLINE const typename MatrixBase<Derived>::RealReturnType
+EIGEN_STRONG_INLINE typename MatrixBase<Derived>::RealReturnType
 MatrixBase<Derived>::real() const { return derived(); }
 
-/** \returns an expression of the imaginary part of \c *this.
+/** \returns an read-only expression of the imaginary part of \c *this.
   *
   * \sa real() */
 template<typename Derived>
@@ -198,7 +203,36 @@ MatrixBase<Derived>::cast() const
   return derived();
 }
 
-/** \relates MatrixBase */
+/** \returns an expression of the coefficient-wise exponential of *this.
+  *
+  * Example: \include Cwise_exp.cpp
+  * Output: \verbinclude Cwise_exp.out
+  *
+  * \sa pow(), log(), sin(), cos()
+  */
+template<typename ExpressionType>
+inline const EIGEN_CWISE_UNOP_RETURN_TYPE(ei_scalar_exp_op)
+Cwise<ExpressionType>::exp() const
+{
+  return _expression();
+}
+
+/** \returns an expression of the coefficient-wise logarithm of *this.
+  *
+  * Example: \include Cwise_log.cpp
+  * Output: \verbinclude Cwise_log.out
+  *
+  * \sa exp()
+  */
+template<typename ExpressionType>
+inline const EIGEN_CWISE_UNOP_RETURN_TYPE(ei_scalar_log_op)
+Cwise<ExpressionType>::log() const
+{
+  return _expression();
+}
+
+
+/** \returns an expression of \c *this scaled by the scalar factor \a scalar */
 template<typename Derived>
 EIGEN_STRONG_INLINE const typename MatrixBase<Derived>::ScalarMultipleReturnType
 MatrixBase<Derived>::operator*(const Scalar& scalar) const
@@ -207,7 +241,17 @@ MatrixBase<Derived>::operator*(const Scalar& scalar) const
     (derived(), ei_scalar_multiple_op<Scalar>(scalar));
 }
 
-/** \relates MatrixBase */
+/** Overloaded for efficient real matrix times complex scalar value */
+template<typename Derived>
+EIGEN_STRONG_INLINE const CwiseUnaryOp<ei_scalar_multiple2_op<typename ei_traits<Derived>::Scalar,
+                                                              std::complex<typename ei_traits<Derived>::Scalar> >, Derived>
+MatrixBase<Derived>::operator*(const std::complex<Scalar>& scalar) const
+{
+  return CwiseUnaryOp<ei_scalar_multiple2_op<Scalar,std::complex<Scalar> >, Derived>
+    (*static_cast<const Derived*>(this), ei_scalar_multiple2_op<Scalar,std::complex<Scalar> >(scalar));
+}
+
+/** \returns an expression of \c *this divided by the scalar value \a scalar */
 template<typename Derived>
 EIGEN_STRONG_INLINE const CwiseUnaryOp<ei_scalar_quotient1_op<typename ei_traits<Derived>::Scalar>, Derived>
 MatrixBase<Derived>::operator/(const Scalar& scalar) const

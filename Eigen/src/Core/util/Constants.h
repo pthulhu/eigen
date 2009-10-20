@@ -1,8 +1,8 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
-// Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2007-2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -39,10 +39,9 @@
   *   Also, disabling compiler warnings for integer overflow, sounds like a bad idea.
   * - It should be a prime number, because for example the old value 10000 led to bugs with 100x100 matrices.
   *
-  * If you wish to port Eigen to a platform where sizeof(int)==2, it is perfectly possible to set Dynamic to, say, 97.
-  * However, changing the value of Dynamic breaks the ABI, as Dynamic is often used as a template parameter for Matrix.
+  * Changing the value of Dynamic breaks the ABI, as Dynamic is often used as a template parameter for Matrix.
   */
-const int Dynamic = 33331;
+const int Dynamic = sizeof(int) >= 4 ? 33331 : 101;
 
 /** This value means +Infinity; it is currently used only as the p parameter to MatrixBase::lpNorm<int>().
   * The value Infinity there means the L-infinity norm.
@@ -186,9 +185,6 @@ const unsigned int HereditaryBits = RowMajorBit
                                   | EvalBeforeAssigningBit
                                   | SparseBit;
 
-// diagonal means both upper and lower triangular
-const unsigned DiagonalBits = UpperTriangularBit | LowerTriangularBit;
-    
 // Possible values for the Mode parameter of part()
 const unsigned int UpperTriangular = UpperTriangularBit;
 const unsigned int StrictlyUpperTriangular = UpperTriangularBit | ZeroDiagBit;
@@ -198,19 +194,14 @@ const unsigned int SelfAdjoint = SelfAdjointBit;
 const unsigned int UnitUpperTriangular = UpperTriangularBit | UnitDiagBit;
 const unsigned int UnitLowerTriangular = LowerTriangularBit | UnitDiagBit;
 
-template<typename T> struct ei_is_diagonal
-{
-  enum {
-    ret = ( (unsigned int)(T::Flags) & DiagonalBits ) == DiagonalBits
-  };
-};
+enum { DiagonalOnTheLeft, DiagonalOnTheRight };
 
 enum { Aligned, Unaligned };
 enum { ForceAligned, AsRequested };
 enum { ConditionalJumpCost = 5 };
 enum CornerType { TopLeft, TopRight, BottomLeft, BottomRight };
 enum DirectionType { Vertical, Horizontal, BothDirections };
-enum ProductEvaluationMode { NormalProduct, CacheFriendlyProduct, DiagonalProduct, SparseTimeSparseProduct, SparseTimeDenseProduct, DenseTimeSparseProduct };
+enum ProductEvaluationMode { NormalProduct, CacheFriendlyProduct, SparseTimeSparseProduct, SparseTimeDenseProduct, DenseTimeSparseProduct };
 
 enum {
   /** \internal Equivalent to a slice vectorization for fixed-size matrices having good alignment
@@ -240,6 +231,32 @@ enum {
                 requested to be aligned) */
   DontAlign = 0x2
 };
+
+// used for the solvers
+enum {
+  OnTheLeft = 1,
+  OnTheRight = 2
+};
+
+// options for SVD decomposition
+enum {
+  SkipU = 0x1,
+  SkipV = 0x2,
+  AtLeastAsManyRowsAsCols = 0x4,
+  AtLeastAsManyColsAsRows = 0x8,
+  Square = AtLeastAsManyRowsAsCols | AtLeastAsManyColsAsRows
+};
+
+/* the following could as well be written:
+ *   enum NoChange_t { NoChange };
+ * but it feels dangerous to disambiguate overloaded functions on enum/integer types.
+ * If on some platform it is really impossible to get rid of "unused variable" warnings, then
+ * we can always come back to that solution.
+ */
+struct NoChange_t {};
+namespace {
+  EIGEN_UNUSED NoChange_t NoChange;
+}
 
 enum {
   IsDense         = 0,

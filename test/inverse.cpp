@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -65,19 +65,34 @@ template<typename MatrixType> void inverse(const MatrixType& m)
 
   // since for the general case we implement separately row-major and col-major, test that
   VERIFY_IS_APPROX(m1.transpose().inverse(), m1.inverse().transpose());
+
+  //computeInverseWithCheck tests
+  //First: an invertible matrix
+  bool invertible = m1.computeInverseWithCheck(&m2);
+  VERIFY(invertible);
+  VERIFY_IS_APPROX(identity, m1*m2);
+
+  //Second: a rank one matrix (not invertible, except for 1x1 matrices)
+  VectorType v3 = VectorType::Random(rows);
+  MatrixType m3 = v3*v3.transpose(), m4(rows,cols);
+  invertible = m3.computeInverseWithCheck( &m4 );
+  VERIFY( rows==1 ? invertible : !invertible );
 }
 
 void test_inverse()
 {
+  int s;
   for(int i = 0; i < g_repeat; i++) {
     CALL_SUBTEST( inverse(Matrix<double,1,1>()) );
     CALL_SUBTEST( inverse(Matrix2d()) );
     CALL_SUBTEST( inverse(Matrix3f()) );
     CALL_SUBTEST( inverse(Matrix4f()) );
-    CALL_SUBTEST( inverse(MatrixXf(8,8)) );
-    CALL_SUBTEST( inverse(MatrixXcd(7,7)) );
+    s = ei_random<int>(50,320);
+    CALL_SUBTEST( inverse(MatrixXf(s,s)) );
+    s = ei_random<int>(25,100);
+    CALL_SUBTEST( inverse(MatrixXcd(s,s)) );
   }
-  
+
   // test some tricky cases for 4x4 matrices
   VERIFY_IS_APPROX((Matrix4f() << 0,0,1,0, 1,0,0,0, 0,1,0,0, 0,0,0,1).finished().inverse(),
                    (Matrix4f() << 0,1,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,1).finished());

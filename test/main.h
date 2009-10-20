@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
@@ -28,12 +28,22 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <typeinfo>
+
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 
 #ifndef EIGEN_TEST_FUNC
 #error EIGEN_TEST_FUNC must be defined
 #endif
 
 #define DEFAULT_REPEAT 10
+
+#ifdef __ICC
+// disable warning #279: controlling expression is constant
+#pragma warning disable 279
+#endif
 
 namespace Eigen
 {
@@ -44,7 +54,7 @@ namespace Eigen
 #define EI_PP_MAKE_STRING2(S) #S
 #define EI_PP_MAKE_STRING(S) EI_PP_MAKE_STRING2(S)
 
-#define EIGEN_DEFAULT_IO_FORMAT IOFormat(4, AlignCols, "  ", "\n", "", "", "", "")
+#define EIGEN_DEFAULT_IO_FORMAT IOFormat(4, 0, "  ", "\n", "", "", "", "")
 
 #ifndef EIGEN_NO_ASSERTION_CHECKING
 
@@ -152,6 +162,8 @@ namespace Eigen
 #define VERIFY_IS_APPROX_OR_LESS_THAN(a, b) VERIFY(test_ei_isApproxOrLessThan(a, b))
 #define VERIFY_IS_NOT_APPROX_OR_LESS_THAN(a, b) VERIFY(!test_ei_isApproxOrLessThan(a, b))
 
+#define VERIFY_IS_UNITARY(a) VERIFY(test_isUnitary(a))
+
 #define CALL_SUBTEST(FUNC) do { \
     g_test_stack.push_back(EI_PP_MAKE_STRING(FUNC)); \
     FUNC; \
@@ -227,23 +239,32 @@ inline bool test_ei_isMuchSmallerThan(const MatrixBase<Derived>& m,
 }
 
 template<typename Derived>
-void createRandomMatrixOfRank(int desired_rank, int rows, int cols, Eigen::MatrixBase<Derived>& m)
+inline bool test_isUnitary(const MatrixBase<Derived>& m)
 {
-  typedef Derived MatrixType;
-  typedef typename ei_traits<MatrixType>::Scalar Scalar;
-  typedef Matrix<Scalar, MatrixType::ColsAtCompileTime, 1> VectorType;
+  return m.isUnitary(test_precision<typename ei_traits<Derived>::Scalar>());
+}
 
-  MatrixType a = MatrixType::Random(rows,rows);
+template<typename MatrixType>
+void createRandomMatrixOfRank(int desired_rank, int rows, int cols, MatrixType& m)
+{
+  typedef typename ei_traits<MatrixType>::Scalar Scalar;
+  enum { Rows = MatrixType::RowsAtCompileTime, Cols = MatrixType::ColsAtCompileTime };
+
+  typedef Matrix<Scalar, Dynamic, 1> VectorType;
+  typedef Matrix<Scalar, Rows, Rows> MatrixAType;
+  typedef Matrix<Scalar, Cols, Cols> MatrixBType;
+
+  MatrixAType a = MatrixAType::Random(rows,rows);
   MatrixType d = MatrixType::Identity(rows,cols);
-  MatrixType  b = MatrixType::Random(cols,cols);
+  MatrixBType  b = MatrixBType::Random(cols,cols);
 
   // set the diagonal such that only desired_rank non-zero entries reamain
   const int diag_size = std::min(d.rows(),d.cols());
   d.diagonal().segment(desired_rank, diag_size-desired_rank) = VectorType::Zero(diag_size-desired_rank);
 
-  QR<MatrixType> qra(a);
-  QR<MatrixType> qrb(b);
-  m = (qra.matrixQ() * d * qrb.matrixQ()).lazy();
+  HouseholderQR<MatrixAType> qra(a);
+  HouseholderQR<MatrixBType> qrb(b);
+  m = qra.matrixQ() * d * qrb.matrixQ();
 }
 
 } // end namespace Eigen

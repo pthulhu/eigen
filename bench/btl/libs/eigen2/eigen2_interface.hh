@@ -104,12 +104,12 @@ public :
   }
 
   static inline void matrix_vector_product(const gene_matrix & A, const gene_vector & B, gene_vector & X, int N){
-    X = (A*B)/*.lazy()*/;
+    X = (A*B).lazy();
   }
 
   static inline void symv(const gene_matrix & A, const gene_vector & B, gene_vector & X, int N){
-    //X = (A.template marked<SelfAdjoint|LowerTriangular>() * B)/*.lazy()*/;
-    ei_product_selfadjoint_vector<real,0,LowerTriangularBit>(N,A.data(),N, B.data(), X.data());
+    X = (A.template selfadjointView<LowerTriangular>() * B)/*.lazy()*/;
+//     ei_product_selfadjoint_vector<real,0,LowerTriangularBit,false,false>(N,A.data(),N, B.data(), 1, X.data(), 1);
   }
 
   template<typename Dest, typename Src> static void triassign(Dest& dst, const Src& src)
@@ -163,8 +163,17 @@ public :
       A.col(j).end(N-j) += X[j] * Y.end(N-j) + Y[j] * X.end(N-j);
   }
 
+  static EIGEN_DONT_INLINE void ger(gene_matrix & A,  gene_vector & X, gene_vector & Y, int N){
+    for(int j=0; j<N; ++j)
+      A.col(j) += X * Y[j];
+  }
+
+  static EIGEN_DONT_INLINE void rot(gene_vector & A,  gene_vector & B, real c, real s, int N){
+    ei_apply_rotation_in_the_plane(A, B, c, s);
+  }
+
   static inline void atv_product(gene_matrix & A, gene_vector & B, gene_vector & X, int N){
-    X = (A.transpose()*B)/*.lazy()*/;
+    X = (A.transpose()*B).lazy();
   }
 
   static inline void axpy(real coef, const gene_vector & X, gene_vector & Y, int N){
@@ -172,9 +181,7 @@ public :
   }
 
   static inline void axpby(real a, const gene_vector & X, real b, gene_vector & Y, int N){
-  asm("#begin axpby");
     Y = a*X + b*Y;
-  asm("#end axpby");
   }
 
   static EIGEN_DONT_INLINE void copy_matrix(const gene_matrix & source, gene_matrix & cible, int N){
@@ -186,23 +193,32 @@ public :
   }
 
   static inline void trisolve_lower(const gene_matrix & L, const gene_vector& B, gene_vector& X, int N){
-    X = L.template marked<LowerTriangular>().solveTriangular(B);
+    X = L.template triangularView<LowerTriangular>().solve(B);
   }
 
   static inline void trisolve_lower_matrix(const gene_matrix & L, const gene_matrix& B, gene_matrix& X, int N){
-    X = L.template marked<LowerTriangular>().solveTriangular(B);
+    X = L.template triangularView<LowerTriangular>().solve(B);
   }
 
   static inline void cholesky(const gene_matrix & X, gene_matrix & C, int N){
-    C = X.llt().matrixL();
+    C = X;
+    ei_llt_inplace<LowerTriangular>::blocked(C);
+    //C = X.llt().matrixL();
 //     C = X;
 //     Cholesky<gene_matrix>::computeInPlace(C);
 //     Cholesky<gene_matrix>::computeInPlaceBlock(C);
   }
 
   static inline void lu_decomp(const gene_matrix & X, gene_matrix & C, int N){
-    C = X.lu().matrixLU();
-//     C = X.inverse();
+    RowVectorXi piv(N);
+    int nb;
+    C = X;
+    ei_partial_lu_inplace(C,piv,nb);
+    //C = X.lu().matrixLU();
+  }
+
+  static inline void partial_lu_decomp(const gene_matrix & X, gene_matrix & C, int N){
+    C = X.partialLu().matrixLU();
   }
 
   static inline void tridiagonalization(const gene_matrix & X, gene_matrix & C, int N){

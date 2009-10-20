@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -81,7 +81,7 @@ template<typename MatrixType> void product(const MatrixType& m)
   m3 = m1;
   m3 *= m1.transpose() * m2;
   VERIFY_IS_APPROX(m3,                      m1 * (m1.transpose()*m2));
-  VERIFY_IS_APPROX(m3,                      m1.lazy() * (m1.transpose()*m2));
+  VERIFY_IS_APPROX(m3,                      m1 * (m1.transpose()*m2));
 
   // continue testing Product.h: distributivity
   VERIFY_IS_APPROX(square*(m1 + m2),        square*m1+square*m2);
@@ -90,9 +90,6 @@ template<typename MatrixType> void product(const MatrixType& m)
   // continue testing Product.h: compatibility with ScalarMultiple.h
   VERIFY_IS_APPROX(s1*(square*m1),          (s1*square)*m1);
   VERIFY_IS_APPROX(s1*(square*m1),          square*(m1*s1));
-
-  // again, test operator() to check const-qualification
-  s1 += (square.lazy() * m1)(r,c);
 
   // test Product.h together with Identity.h
   VERIFY_IS_APPROX(v1,                      identity*v1);
@@ -112,15 +109,28 @@ template<typename MatrixType> void product(const MatrixType& m)
 
   // test optimized operator+= path
   res = square;
-  res += (m1 * m2.transpose()).lazy();
+  res.noalias() += m1 * m2.transpose();
   VERIFY_IS_APPROX(res, square + m1 * m2.transpose());
   if (NumTraits<Scalar>::HasFloatingPoint && std::min(rows,cols)>1)
   {
     VERIFY(areNotApprox(res,square + m2 * m1.transpose()));
   }
   vcres = vc2;
-  vcres += (m1.transpose() * v1).lazy();
+  vcres.noalias() += m1.transpose() * v1;
   VERIFY_IS_APPROX(vcres, vc2 + m1.transpose() * v1);
+
+  // test optimized operator-= path
+  res = square;
+  res.noalias() -= m1 * m2.transpose();
+  VERIFY_IS_APPROX(res, square - (m1 * m2.transpose()));
+  if (NumTraits<Scalar>::HasFloatingPoint && std::min(rows,cols)>1)
+  {
+    VERIFY(areNotApprox(res,square - m2 * m1.transpose()));
+  }
+  vcres = vc2;
+  vcres.noalias() -= m1.transpose() * v1;
+  VERIFY_IS_APPROX(vcres, vc2 - m1.transpose() * v1);
+
   tm1 = m1;
   VERIFY_IS_APPROX(tm1.transpose() * v1, m1.transpose() * v1);
   VERIFY_IS_APPROX(v1.transpose() * tm1, v1.transpose() * m1);
@@ -135,11 +145,10 @@ template<typename MatrixType> void product(const MatrixType& m)
   VERIFY_IS_APPROX(res, m1 * m2.transpose());
 
   res2 = square2;
-  res2 += (m1.transpose() * m2).lazy();
+  res2.noalias() += m1.transpose() * m2;
   VERIFY_IS_APPROX(res2, square2 + m1.transpose() * m2);
   if (NumTraits<Scalar>::HasFloatingPoint && std::min(rows,cols)>1)
   {
     VERIFY(areNotApprox(res2,square2 + m2.transpose() * m1));
   }
 }
-

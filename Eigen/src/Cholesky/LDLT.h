@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2009 Keir Mierle <mierle@gmail.com>
@@ -62,16 +62,29 @@ template<typename MatrixType> class LDLT
     typedef Matrix<int, MatrixType::RowsAtCompileTime, 1> IntColVectorType;
     typedef Matrix<int, 1, MatrixType::RowsAtCompileTime> IntRowVectorType;
 
+    /**
+    * \brief Default Constructor.
+    *
+    * The default constructor is useful in cases in which the user intends to
+    * perform decompositions via LDLT::compute(const MatrixType&).
+    */
+    LDLT() : m_matrix(), m_p(), m_transpositions(), m_isInitialized(false) {}
+
     LDLT(const MatrixType& matrix)
       : m_matrix(matrix.rows(), matrix.cols()),
         m_p(matrix.rows()),
-        m_transpositions(matrix.rows())
+        m_transpositions(matrix.rows()),
+        m_isInitialized(false)
     {
       compute(matrix);
     }
 
     /** \returns the lower triangular matrix L */
-    inline Part<MatrixType, UnitLowerTriangular> matrixL(void) const { return m_matrix; }
+    inline TriangularView<MatrixType, UnitLowerTriangular> matrixL(void) const
+    { 
+      ei_assert(m_isInitialized && "LDLT is not initialized.");
+      return m_matrix;
+    }
 
     /** \returns a vector of integers, whose size is the number of rows of the matrix being decomposed,
       * representing the P permutation i.e. the permutation of the rows. For its precise meaning,
@@ -79,25 +92,38 @@ template<typename MatrixType> class LDLT
       */
     inline const IntColVectorType& permutationP() const
     {
+      ei_assert(m_isInitialized && "LDLT is not initialized.");
       return m_p;
     }
 
     /** \returns the coefficients of the diagonal matrix D */
-    inline Diagonal<MatrixType,0> vectorD(void) const { return m_matrix.diagonal(); }
+    inline Diagonal<MatrixType,0> vectorD(void) const
+    {
+      ei_assert(m_isInitialized && "LDLT is not initialized.");
+      return m_matrix.diagonal();
+    }
 
     /** \returns true if the matrix is positive (semidefinite) */
-    inline bool isPositive(void) const { return m_sign == 1; }
+    inline bool isPositive(void) const
+    {
+      ei_assert(m_isInitialized && "LDLT is not initialized.");
+      return m_sign == 1;
+    }
 
     /** \returns true if the matrix is negative (semidefinite) */
-    inline bool isNegative(void) const { return m_sign == -1; }
+    inline bool isNegative(void) const
+    {
+      ei_assert(m_isInitialized && "LDLT is not initialized.");
+      return m_sign == -1;
+    }
 
-    template<typename RhsDerived, typename ResDerived>
-    bool solve(const MatrixBase<RhsDerived> &b, MatrixBase<ResDerived> *result) const;
+    template<typename RhsDerived, typename ResultType>
+    bool solve(const MatrixBase<RhsDerived> &b, ResultType *result) const;
 
     template<typename Derived>
     bool solveInPlace(MatrixBase<Derived> &bAndX) const;
 
-    void compute(const MatrixType& matrix);
+    LDLT& compute(const MatrixType& matrix);
 
   protected:
     /** \internal
@@ -110,12 +136,13 @@ template<typename MatrixType> class LDLT
     IntColVectorType m_p;
     IntColVectorType m_transpositions;
     int m_sign;
+    bool m_isInitialized;
 };
 
 /** Compute / recompute the LDLT decomposition A = L D L^* = U^* D U of \a matrix
   */
 template<typename MatrixType>
-void LDLT<MatrixType>::compute(const MatrixType& a)
+LDLT<MatrixType>& LDLT<MatrixType>::compute(const MatrixType& a)
 {
   ei_assert(a.rows()==a.cols());
   const int size = a.rows();
@@ -126,7 +153,8 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
     m_p.setZero();
     m_transpositions.setZero();
     m_sign = ei_real(a.coeff(0,0))>0 ? 1:-1;
-    return;
+    m_isInitialized = true;
+    return *this;
   }
 
   RealScalar cutoff = 0, biggest_in_corner;
@@ -152,7 +180,7 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
       // in "Analysis of the Cholesky Decomposition of a Semi-definite Matrix" by
       // Nicholas J. Higham. Also see "Accuracy and Stability of Numerical
       // Algorithms" page 217, also by Higham.
-      cutoff = ei_abs(machine_epsilon<Scalar>() * size * biggest_in_corner);
+      cutoff = ei_abs(epsilon<Scalar>() * size * biggest_in_corner);
 
       m_sign = ei_real(m_matrix.diagonal().coeff(index_of_biggest_in_corner)) > 0 ? 1 : -1;
     }
@@ -177,8 +205,8 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
       continue;
     }
 
-    RealScalar Djj = ei_real(m_matrix.coeff(j,j) - (m_matrix.row(j).start(j)
-                                                  * m_matrix.col(j).start(j).conjugate()).coeff(0,0));
+    RealScalar Djj = ei_real(m_matrix.coeff(j,j) -  m_matrix.row(j).start(j)
+                                               .dot(m_matrix.col(j).start(j)));
     m_matrix.coeffRef(j,j) = Djj;
 
     // Finish early if the matrix is not full rank.
@@ -190,8 +218,8 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
 
     int endSize = size - j - 1;
     if (endSize > 0) {
-      _temporary.end(endSize) = ( m_matrix.block(j+1,0, endSize, j)
-                                * m_matrix.col(j).start(j).conjugate() ).lazy();
+      _temporary.end(endSize).noalias() = m_matrix.block(j+1,0, endSize, j)
+                                * m_matrix.col(j).start(j).conjugate();
 
       m_matrix.row(j).end(endSize) = m_matrix.row(j).end(endSize).conjugate()
                                    - _temporary.end(endSize).transpose();
@@ -205,6 +233,9 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
   for(int k = size-1; k >= 0; --k) {
     std::swap(m_p.coeffRef(k), m_p.coeffRef(m_transpositions.coeff(k)));
   }
+
+  m_isInitialized = true;
+  return *this;
 }
 
 /** Computes the solution x of \f$ A x = b \f$ using the current decomposition of A.
@@ -218,10 +249,11 @@ void LDLT<MatrixType>::compute(const MatrixType& a)
   * \sa LDLT::solveInPlace(), MatrixBase::ldlt()
   */
 template<typename MatrixType>
-template<typename RhsDerived, typename ResDerived>
+template<typename RhsDerived, typename ResultType>
 bool LDLT<MatrixType>
-::solve(const MatrixBase<RhsDerived> &b, MatrixBase<ResDerived> *result) const
+::solve(const MatrixBase<RhsDerived> &b, ResultType *result) const
 {
+  ei_assert(m_isInitialized && "LDLT is not initialized.");
   const int size = m_matrix.rows();
   ei_assert(size==b.rows() && "LDLT::solve(): invalid number of rows of the right hand side matrix b");
   *result = b;
@@ -243,6 +275,7 @@ template<typename MatrixType>
 template<typename Derived>
 bool LDLT<MatrixType>::solveInPlace(MatrixBase<Derived> &bAndX) const
 {
+  ei_assert(m_isInitialized && "LDLT is not initialized.");
   const int size = m_matrix.rows();
   ei_assert(size == bAndX.rows());
 
@@ -250,13 +283,14 @@ bool LDLT<MatrixType>::solveInPlace(MatrixBase<Derived> &bAndX) const
   for(int i = 0; i < size; ++i) bAndX.row(m_transpositions.coeff(i)).swap(bAndX.row(i));
 
   // y = L^-1 z
-  matrixL().solveTriangularInPlace(bAndX);
+  //matrixL().solveInPlace(bAndX);
+  m_matrix.template triangularView<UnitLowerTriangular>().solveInPlace(bAndX);
 
   // w = D^-1 y
   bAndX = (m_matrix.diagonal().cwise().inverse().asDiagonal() * bAndX).lazy();
 
   // u = L^-T w
-  m_matrix.adjoint().template part<UnitUpperTriangular>().solveTriangularInPlace(bAndX);
+  m_matrix.adjoint().template triangularView<UnitUpperTriangular>().solveInPlace(bAndX);
 
   // x = P^T u
   for (int i = size-1; i >= 0; --i) bAndX.row(m_transpositions.coeff(i)).swap(bAndX.row(i));

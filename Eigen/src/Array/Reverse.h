@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2009 Ricard Marxer <email@ricardmarxer.com>
@@ -36,10 +36,10 @@
   * \param MatrixType the type of the object of which we are taking the reverse
   *
   * This class represents an expression of the reverse of a vector.
-  * It is the return type of MatrixBase::reverse() and PartialRedux::reverse()
+  * It is the return type of MatrixBase::reverse() and VectorwiseOp::reverse()
   * and most of the time this is the only way it is used.
   *
-  * \sa MatrixBase::reverse(), PartialRedux::reverse()
+  * \sa MatrixBase::reverse(), VectorwiseOp::reverse()
   */
 template<typename MatrixType, int Direction>
 struct ei_traits<Reverse<MatrixType, Direction> >

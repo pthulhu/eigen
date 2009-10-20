@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -65,7 +65,12 @@ template<typename MatrixType> void nomalloc(const MatrixType& m)
   VERIFY_IS_APPROX((m1+m2)*s1,              s1*m1+s1*m2);
   VERIFY_IS_APPROX((m1+m2)(r,c), (m1(r,c))+(m2(r,c)));
   VERIFY_IS_APPROX(m1.cwise() * m1.block(0,0,rows,cols), m1.cwise() * m1);
-  VERIFY_IS_APPROX((m1*m1.transpose())*m2,  m1*(m1.transpose()*m2));
+  if (MatrixType::RowsAtCompileTime<EIGEN_CACHEFRIENDLY_PRODUCT_THRESHOLD) {
+    // If the matrices are too large, we have better to use the optimized GEMM
+    // routines which allocates temporaries. However, on some platforms
+    // these temporaries are allocated on the stack using alloca.
+    VERIFY_IS_APPROX((m1*m1.transpose())*m2,  m1*(m1.transpose()*m2));
+  }
 }
 
 void test_nomalloc()

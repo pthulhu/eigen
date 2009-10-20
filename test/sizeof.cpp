@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -43,4 +43,7 @@ void test_sizeof()
   CALL_SUBTEST( verifySizeOf(MatrixXi(8, 12)) );
   CALL_SUBTEST( verifySizeOf(MatrixXcd(20, 20)) );
   CALL_SUBTEST( verifySizeOf(Matrix<float, 100, 100>()) );
+  
+  VERIFY(sizeof(std::complex<float>) == 2*sizeof(float));
+  VERIFY(sizeof(std::complex<double>) == 2*sizeof(double));
 }

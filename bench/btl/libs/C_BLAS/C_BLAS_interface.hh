@@ -61,6 +61,7 @@ extern "C"
   void sgehrd_( const int *n, int *ilo, int *ihi, float *a, const int *lda, float *tau, float *work, int *lwork, int *info );
 
   // LU row pivoting
+//   void dgetrf_( int *m, int *n, double *a, int *lda, int *ipiv, int *info );
 //   void sgetrf_(const int* m, const int* n, float *a, const int* ld, int* ipivot, int* info);
   // LU full pivoting
   void sgetc2_(const int* n, float *a, const int *lda, int *ipiv, int *jpiv, int*info );
@@ -132,6 +133,7 @@ static char notrans = 'N';
 static char trans = 'T';
 static char nonunit = 'N';
 static char lower = 'L';
+static char right = 'R';
 static int intone = 1;
 
 template<>
@@ -160,7 +162,7 @@ public :
     cblas_ssymv(CblasColMajor,CblasLower,N,1.0,A,N,B,1,0.0,X,1);
     #endif
   }
-  
+
   static inline void syr2(gene_matrix & A, gene_vector & B, gene_vector & X, int N){
     #ifdef PUREBLAS
     ssyr2_(&lower,&N,&fone,B,&intone,X,&intone,A,&N);
@@ -169,6 +171,22 @@ public :
     #endif
   }
 
+  static inline void ger(gene_matrix & A, gene_vector & X, gene_vector & Y, int N){
+    #ifdef PUREBLAS
+    sger_(&N,&N,&fone,X,&intone,Y,&intone,A,&N);
+    #else
+    cblas_sger(CblasColMajor,N,N,1.0,X,1,Y,1,A,N);
+    #endif
+  }
+
+  static inline void rot(gene_vector & A,  gene_vector & B, float c, float s, int N){
+    #ifdef PUREBLAS
+    srot_(&N,A,&intone,B,&intone,&c,&s);
+    #else
+    cblas_srot(N,A,1,B,1,c,s);
+    #endif
+  }
+  
   static inline void atv_product(gene_matrix & A, gene_vector & B, gene_vector & X, int N){
     #ifdef PUREBLAS
     sgemv_(&trans,&N,&N,&fone,A,&N,B,&intone,&fzero,X,&intone);
@@ -235,6 +253,15 @@ public :
     spotrf_(&uplo, &N, C, &N, &info);
   }
 
+  static inline void partial_lu_decomp(const gene_matrix & X, gene_matrix & C, int N){
+    int N2 = N*N;
+    scopy_(&N2, X, &intone, C, &intone);
+    char uplo = 'L';
+    int info = 0;
+    int * ipiv = (int*)alloca(sizeof(int)*N);
+    sgetrf_(&N, &N, C, &N, ipiv, &info);
+  }
+
   #ifdef HAS_LAPACK
 
   static inline void lu_decomp(const gene_matrix & X, gene_matrix & C, int N){
@@ -246,6 +273,8 @@ public :
     int * jpiv = (int*)alloca(sizeof(int)*N);
     sgetc2_(&N, C, &N, ipiv, jpiv, &info);
   }
+
+  
 
   static inline void hessenberg(const gene_matrix & X, gene_matrix & C, int N){
 #ifdef PUREBLAS
@@ -302,7 +331,7 @@ public :
   static inline void trisolve_lower_matrix(const gene_matrix & L, const gene_matrix& B, gene_matrix & X, int N){
     #ifdef PUREBLAS
     scopy_(&N, B, &intone, X, &intone);
-    strsv_(&lower, &notrans, &nonunit, &N, L, &N, X, &intone);
+    strsm_(&right, &lower, &notrans, &nonunit, &N, &N, &fone, L, &N, X, &N);
     #else
     cblas_scopy(N, B, 1, X, 1);
     cblas_strsm(CblasColMajor, CblasRight, CblasLower, CblasNoTrans, CblasNonUnit, N, N, 1, L, N, X, N);

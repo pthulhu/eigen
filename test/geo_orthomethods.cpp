@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -86,10 +86,10 @@ template<typename Scalar, int Size> void orthomethods(int size=Size)
   VERIFY_IS_MUCH_SMALLER_THAN(v0.unitOrthogonal().dot(v0), Scalar(1));
   VERIFY_IS_APPROX(v0.unitOrthogonal().norm(), RealScalar(1));
 
-  if (size>3)
+  if (size>=3)
   {
-    v0.template start<3>().setZero();
-    v0.end(size-3).setRandom();
+    v0.template start<2>().setZero();
+    v0.end(size-2).setRandom();
 
     VERIFY_IS_MUCH_SMALLER_THAN(v0.unitOrthogonal().dot(v0), Scalar(1));
     VERIFY_IS_APPROX(v0.unitOrthogonal().norm(), RealScalar(1));

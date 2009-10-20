@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -41,7 +41,7 @@
 
 #ifndef EIGEN_NO_STATIC_ASSERT
 
-  #ifdef __GXX_EXPERIMENTAL_CXX0X__
+  #if defined(__GXX_EXPERIMENTAL_CXX0X__) || (defined(_MSC_VER) && (_MSC_VER >= 1600))
 
     // if native static_assert is enabled, let's use it
     #define EIGEN_STATIC_ASSERT(X,MSG) static_assert(X,#MSG);
@@ -62,8 +62,10 @@
         THIS_METHOD_IS_ONLY_FOR_MATRICES_OF_A_SPECIFIC_SIZE,
         YOU_MADE_A_PROGRAMMING_MISTAKE,
         YOU_CALLED_A_FIXED_SIZE_METHOD_ON_A_DYNAMIC_SIZE_MATRIX_OR_VECTOR,
+        YOU_CALLED_A_DYNAMIC_SIZE_METHOD_ON_A_FIXED_SIZE_MATRIX_OR_VECTOR,
         UNALIGNED_LOAD_AND_STORE_OPERATIONS_UNIMPLEMENTED_ON_ALTIVEC,
         NUMERIC_TYPE_MUST_BE_FLOATING_POINT,
+        NUMERIC_TYPE_MUST_BE_REAL,
         COEFFICIENT_WRITE_ACCESS_TO_SELFADJOINT_NOT_SUPPORTED,
         WRITING_TO_TRIANGULAR_PART_WITH_UNIT_DIAGONAL_IS_NOT_SUPPORTED,
         THIS_METHOD_IS_ONLY_FOR_FIXED_SIZE,
@@ -75,7 +77,8 @@
         THIS_METHOD_IS_ONLY_FOR_ROW_MAJOR_MATRICES,
         INVALID_MATRIX_TEMPLATE_PARAMETERS,
         BOTH_MATRICES_MUST_HAVE_THE_SAME_STORAGE_ORDER,
-        THIS_METHOD_IS_ONLY_FOR_DIAGONAL_MATRIX
+        THIS_METHOD_IS_ONLY_FOR_DIAGONAL_MATRIX,
+        THE_MATRIX_OR_EXPRESSION_THAT_YOU_PASSED_DOES_NOT_HAVE_THE_EXPECTED_TYPE
       };
     };
 
@@ -112,6 +115,11 @@
 #define EIGEN_STATIC_ASSERT_FIXED_SIZE(TYPE) \
   EIGEN_STATIC_ASSERT(TYPE::SizeAtCompileTime!=Eigen::Dynamic, \
                       YOU_CALLED_A_FIXED_SIZE_METHOD_ON_A_DYNAMIC_SIZE_MATRIX_OR_VECTOR)
+
+// static assertion failing if the type \a TYPE is not dynamic-size
+#define EIGEN_STATIC_ASSERT_DYNAMIC_SIZE(TYPE) \
+  EIGEN_STATIC_ASSERT(TYPE::SizeAtCompileTime==Eigen::Dynamic, \
+                      YOU_CALLED_A_DYNAMIC_SIZE_METHOD_ON_A_FIXED_SIZE_MATRIX_OR_VECTOR)
 
 // static assertion failing if the type \a TYPE is not a vector type of the given size
 #define EIGEN_STATIC_ASSERT_VECTOR_SPECIFIC_SIZE(TYPE, SIZE) \

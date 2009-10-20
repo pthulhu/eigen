@@ -27,6 +27,13 @@
 #  - EIGEN_WORK_DIR: directory used to download the source files and make the builds
 #      default: folder which contains this script
 #  - EIGEN_CMAKE_ARGS: additional arguments passed to cmake
+#  - EIGEN_GENERATOR_TYPE: allows to overwrite the generator type
+#      default: nmake (windows
+#      See http://www.cmake.org/cmake/help/cmake2.6docs.html#section_Generators for a complete
+#      list of supported generators.
+#  - EIGEN_NO_UPDATE: allows to submit dash boards from local repositories
+#      This might be interesting in case you want to submit dashboards
+#      including local changes.
 #  - CTEST_SOURCE_DIRECTORY: path to eigen's src (use a new and empty folder, not the one you are working on)
 #      default: <EIGEN_WORK_DIR>/src
 #  - CTEST_BINARY_DIRECTORY: build directory
@@ -39,7 +46,7 @@
 # VERSION=opensuse-11.1
 # WORK_DIR=/home/gael/Coding/eigen2/cdash
 # # get the last version of the script
-# svn cat svn://anonsvn.kde.org/home/kde/trunk/kdesupport/eigen2/test/testsuite.cmake > $WORK_DIR/testsuite.cmake
+# wget http://bitbucket.org/eigen/eigen2/raw/tip/test/testsuite.cmake -o $WORK_DIR/testsuite.cmake
 # COMMON="ctest -S $WORK_DIR/testsuite.cmake,EIGEN_WORK_DIR=$WORK_DIR,EIGEN_SITE=$SITE,EIGEN_MODE=$1,EIGEN_BUILD_STRING=$OS_VERSION-$ARCH"
 # $COMMON-gcc-3.4.6,EIGEN_CXX=g++-3.4
 # $COMMON-gcc-4.0.1,EIGEN_CXX=g++-4.0.1
@@ -132,13 +139,16 @@ endif(NOT EIGEN_MODE)
 
 ## mandatory variables (the default should be ok in most cases):
 
-SET (CTEST_CVS_COMMAND "svn")
-SET (CTEST_CVS_CHECKOUT "${CTEST_CVS_COMMAND} co svn://anonsvn.kde.org/home/kde/trunk/kdesupport/eigen2 \"${CTEST_SOURCE_DIRECTORY}\"")
+if(NOT EIGEN_NO_UPDATE)
+  SET (CTEST_CVS_COMMAND "hg")
+  SET (CTEST_CVS_CHECKOUT "${CTEST_CVS_COMMAND} clone http://bitbucket.org/eigen/eigen2 \"${CTEST_SOURCE_DIRECTORY}\"")
+  SET(CTEST_BACKUP_AND_RESTORE TRUE) # the backup is CVS related ...
+endif(NOT EIGEN_NO_UPDATE)
 
 # which ctest command to use for running the dashboard
 SET (CTEST_COMMAND "${EIGEN_CMAKE_DIR}ctest -D ${EIGEN_MODE}")
 # what cmake command to use for configuring this dashboard
-SET (CTEST_CMAKE_COMMAND "${EIGEN_CMAKE_DIR}cmake -DEIGEN_BUILD_TESTS=on ")
+SET (CTEST_CMAKE_COMMAND "${EIGEN_CMAKE_DIR}cmake -DEIGEN_CMAKE_RUN_FROM_CTEST=ON")
 
 ####################################################################
 # The values in this section are optional you can either
@@ -150,20 +160,29 @@ SET($ENV{LC_MESSAGES} "en_EN")
 
 # should ctest wipe the binary tree before running
 SET(CTEST_START_WITH_EMPTY_BINARY_DIRECTORY TRUE)
-SET(CTEST_BACKUP_AND_RESTORE TRUE)
 
 # this is the initial cache to use for the binary tree, be careful to escape
 # any quotes inside of this string if you use it
 if(WIN32 AND NOT UNIX)
   #message(SEND_ERROR "win32")
-  set(CTEST_CMAKE_COMMAND "${CTEST_CMAKE_COMMAND} -G \"NMake Makefiles\" -DCMAKE_MAKE_PROGRAM=nmake")
-  SET (CTEST_INITIAL_CACHE "
-    MAKECOMMAND:STRING=nmake -i
-    CMAKE_MAKE_PROGRAM:FILEPATH=nmake
-    CMAKE_GENERATOR:INTERNAL=NMake Makefiles
-    BUILDNAME:STRING=${EIGEN_BUILD_STRING}
-    SITE:STRING=${EIGEN_SITE}
-  ")
+  if(EIGEN_GENERATOR_TYPE)
+    set(CTEST_CMAKE_COMMAND "${CTEST_CMAKE_COMMAND} -G \"${EIGEN_GENERATOR_TYPE}\"")
+    SET (CTEST_INITIAL_CACHE "
+      CMAKE_BUILD_TYPE:STRING=Release
+      BUILDNAME:STRING=${EIGEN_BUILD_STRING}
+      SITE:STRING=${EIGEN_SITE}
+    ")
+  else(EIGEN_GENERATOR_TYPE)
+    set(CTEST_CMAKE_COMMAND "${CTEST_CMAKE_COMMAND} -G \"NMake Makefiles\" -DCMAKE_MAKE_PROGRAM=nmake")
+    SET (CTEST_INITIAL_CACHE "
+      MAKECOMMAND:STRING=nmake /i
+      CMAKE_MAKE_PROGRAM:FILEPATH=nmake
+      CMAKE_GENERATOR:INTERNAL=NMake Makefiles
+      CMAKE_BUILD_TYPE:STRING=Release
+      BUILDNAME:STRING=${EIGEN_BUILD_STRING}
+      SITE:STRING=${EIGEN_SITE}
+    ")
+  endif(EIGEN_GENERATOR_TYPE)
 else(WIN32 AND NOT UNIX)
   SET (CTEST_INITIAL_CACHE "
     BUILDNAME:STRING=${EIGEN_BUILD_STRING}
@@ -172,10 +191,11 @@ else(WIN32 AND NOT UNIX)
 endif(WIN32 AND NOT UNIX)
 
 # set any extra environment variables to use during the execution of the script here:
+# setting this variable on windows machines causes trouble ...
 
-if(EIGEN_CXX)
+if(EIGEN_CXX AND NOT WIN32)
   set(CTEST_ENVIRONMENT "CXX=${EIGEN_CXX}")
-endif(EIGEN_CXX)
+endif(EIGEN_CXX AND NOT WIN32)
 
 if(DEFINED EIGEN_EXPLICIT_VECTORIZATION)
   if(EIGEN_EXPLICIT_VECTORIZATION MATCHES SSE2)

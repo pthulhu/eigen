@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Ilya Baran <ibaran@mit.edu>
 //
@@ -93,8 +93,6 @@ namespace Eigen {
   * intersects the query (but possibly on other objects too) unless the search is terminated prematurely.  It is the
   * responsibility of the intersectObject function to keep track of the results in whatever manner is appropriate.
   * The cartesian product intersection and the BVMinimize queries are similar--see their individual documentation.
-  *
-  * \addexample BVH_Example \label How to use a BVH to find the closest pair between two point sets
   *
   * The following is a simple but complete example for how to use the BVH to accelerate the search for a closest red-blue point pair:
   * \include BVH_Example.cpp

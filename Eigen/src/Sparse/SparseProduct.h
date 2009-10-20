@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -29,9 +29,7 @@ template<typename Lhs, typename Rhs> struct ei_sparse_product_mode
 {
   enum {
 
-    value = ei_is_diagonal<Lhs>::ret || ei_is_diagonal<Rhs>::ret
-          ? DiagonalProduct
-          :  (Rhs::Flags&Lhs::Flags&SparseBit)==SparseBit
+    value = (Rhs::Flags&Lhs::Flags&SparseBit)==SparseBit
           ? SparseTimeSparseProduct
           : (Lhs::Flags&SparseBit)==SparseBit
           ? SparseTimeDenseProduct
@@ -45,15 +43,6 @@ struct SparseProductReturnType
   typedef const typename ei_nested<Rhs,Lhs::RowsAtCompileTime>::type RhsNested;
 
   typedef SparseProduct<LhsNested, RhsNested, ProductMode> Type;
-};
-
-template<typename Lhs, typename Rhs>
-struct SparseProductReturnType<Lhs,Rhs,DiagonalProduct>
-{
-  typedef const typename ei_nested<Lhs,Rhs::RowsAtCompileTime>::type LhsNested;
-  typedef const typename ei_nested<Rhs,Lhs::RowsAtCompileTime>::type RhsNested;
-
-  typedef SparseDiagonalProduct<LhsNested, RhsNested> Type;
 };
 
 // sparse product return type specialization
@@ -106,7 +95,7 @@ struct ei_traits<SparseProduct<LhsNested, RhsNested, ProductMode> >
 //     RhsIsRowMajor = (RhsFlags & RowMajorBit)==RowMajorBit,
 
     EvalToRowMajor = (RhsFlags & LhsFlags & RowMajorBit),
-    ResultIsSparse = ProductMode==SparseTimeSparseProduct || ProductMode==DiagonalProduct,
+    ResultIsSparse = ProductMode==SparseTimeSparseProduct,
 
     RemovedBits = ~( (EvalToRowMajor ? 0 : RowMajorBit) | (ResultIsSparse ? 0 : SparseBit) ),
 
@@ -192,7 +181,6 @@ static void ei_sparse_product_impl(const Lhs& lhs, const Rhs& rhs, ResultType& r
   float ratioRes = std::min(ratioLhs * avgNnzPerRhsColumn, 1.f);
 
   res.resize(rows, cols);
-  res.setZero();
   res.reserve(int(ratioRes*rows*cols));
   for (int j=0; j<cols; ++j)
   {
@@ -317,23 +305,9 @@ inline Derived& SparseMatrixBase<Derived>::operator=(const SparseProduct<Lhs,Rhs
 }
 
 // dense = sparse * dense
-// template<typename Derived>
-// template<typename Lhs, typename Rhs>
-// Derived& MatrixBase<Derived>::lazyAssign(const SparseProduct<Lhs,Rhs,SparseTimeDenseProduct>& product)
-// {
-//   typedef typename ei_cleantype<Lhs>::type _Lhs;
-//   typedef typename _Lhs::InnerIterator LhsInnerIterator;
-//   enum { LhsIsRowMajor = (_Lhs::Flags&RowMajorBit)==RowMajorBit };
-//   derived().setZero();
-//   for (int j=0; j<product.lhs().outerSize(); ++j)
-//     for (LhsInnerIterator i(product.lhs(),j); i; ++i)
-//       derived().row(LhsIsRowMajor ? j : i.index()) += i.value() * product.rhs().row(LhsIsRowMajor ? i.index() : j);
-//   return derived();
-// }
-
-template<typename Derived>
-template<typename Lhs, typename Rhs>
-Derived& MatrixBase<Derived>::lazyAssign(const SparseProduct<Lhs,Rhs,SparseTimeDenseProduct>& product)
+// Note that here we force no inlining and separate the setZero() because GCC messes up otherwise
+template<typename Lhs, typename Rhs, typename Dest>
+EIGEN_DONT_INLINE void ei_sparse_time_dense_product(const Lhs& lhs, const Rhs& rhs, Dest& dst)
 {
   typedef typename ei_cleantype<Lhs>::type _Lhs;
   typedef typename ei_cleantype<Rhs>::type _Rhs;
@@ -347,34 +321,44 @@ Derived& MatrixBase<Derived>::lazyAssign(const SparseProduct<Lhs,Rhs,SparseTimeD
           || ( (_Lhs::Flags&LowerTriangularBit) && LhsIsRowMajor) ),
     ProcessSecondHalf = LhsIsSelfAdjoint && (!ProcessFirstHalf)
   };
-  derived().setZero();
-  for (int j=0; j<product.lhs().outerSize(); ++j)
+  for (int j=0; j<lhs.outerSize(); ++j)
   {
-    LhsInnerIterator i(product.lhs(),j);
+    LhsInnerIterator i(lhs,j);
     if (ProcessSecondHalf && i && (i.index()==j))
     {
-      derived().row(j) += i.value() * product.rhs().row(j);
+      dst.row(j) += i.value() * rhs.row(j);
       ++i;
     }
-    Block<Derived,1,Derived::ColsAtCompileTime> res(derived().row(LhsIsRowMajor ? j : 0));
-    for (; (ProcessFirstHalf ? i && i.index() < j : i) ; ++i)
+    typename Rhs::Scalar rhs_j = rhs.coeff(j,0);
+    Block<Dest,1,Dest::ColsAtCompileTime> dst_j(dst.row(LhsIsRowMajor ? j : 0));
+    for(; (ProcessFirstHalf ? i && i.index() < j : i) ; ++i)
     {
-      if (LhsIsSelfAdjoint)
+      if(LhsIsSelfAdjoint)
       {
         int a = LhsIsRowMajor ? j : i.index();
         int b = LhsIsRowMajor ? i.index() : j;
-        Scalar v = i.value();
-        derived().row(a) += (v) * product.rhs().row(b);
-        derived().row(b) += ei_conj(v) * product.rhs().row(a);
+        typename Lhs::Scalar v = i.value();
+        dst.row(a) += (v) * rhs.row(b);
+        dst.row(b) += ei_conj(v) * rhs.row(a);
       }
-      else if (LhsIsRowMajor)
-        res += i.value() * product.rhs().row(i.index());
+      else if(LhsIsRowMajor)
+        dst_j += i.value() * rhs.row(i.index());
+      else if(Rhs::ColsAtCompileTime==1)
+        dst.coeffRef(i.index()) += i.value() * rhs_j;
       else
-        derived().row(i.index()) += i.value() * product.rhs().row(j);
+        dst.row(i.index()) += i.value() * rhs.row(j);
     }
     if (ProcessFirstHalf && i && (i.index()==j))
-      derived().row(j) += i.value() * product.rhs().row(j);
+      dst.row(j) += i.value() * rhs.row(j);
   }
+}
+
+template<typename Derived>
+template<typename Lhs, typename Rhs>
+Derived& MatrixBase<Derived>::lazyAssign(const SparseProduct<Lhs,Rhs,SparseTimeDenseProduct>& product)
+{
+  derived().setZero();
+  ei_sparse_time_dense_product(product.lhs(), product.rhs(), derived());
   return derived();
 }
 

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -159,5 +159,5 @@ void test_stdvector()
 
   // some Quaternion
   CALL_SUBTEST(check_stdvector_quaternion(Quaternionf()));
-  CALL_SUBTEST(check_stdvector_quaternion(Quaternionf()));
+  CALL_SUBTEST(check_stdvector_quaternion(Quaterniond()));
 }

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -35,6 +35,22 @@ SparseMatrixBase<Derived>::sum() const
     for (typename Derived::InnerIterator iter(derived(),j); iter; ++iter)
       res += iter.value();
   return res;
+}
+
+template<typename _Scalar, int _Options>
+typename ei_traits<SparseMatrix<_Scalar,_Options> >::Scalar
+SparseMatrix<_Scalar,_Options>::sum() const
+{
+  ei_assert(rows()>0 && cols()>0 && "you are using a non initialized matrix");
+  return Matrix<Scalar,1,Dynamic>::Map(m_data.value(0), m_data.size()).sum();
+}
+
+template<typename _Scalar, int _Options>
+typename ei_traits<SparseVector<_Scalar,_Options> >::Scalar
+SparseVector<_Scalar,_Options>::sum() const
+{
+  ei_assert(rows()>0 && cols()>0 && "you are using a non initialized matrix");
+  return Matrix<Scalar,1,Dynamic>::Map(m_data.value(0), m_data.size()).sum();
 }
 
 #endif // EIGEN_SPARSEREDUX_H

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -86,9 +86,11 @@ class ei_compute_matrix_flags
 {
     enum {
       row_major_bit = Options&RowMajor ? RowMajorBit : 0,
-      inner_max_size = row_major_bit ? MaxCols : MaxRows,
+      inner_max_size = MaxCols==1 ? MaxRows
+                     : MaxRows==1 ? MaxCols
+                     : row_major_bit ? MaxCols : MaxRows,
       is_big = inner_max_size == Dynamic,
-      is_packet_size_multiple = (Cols*Rows) % ei_packet_traits<Scalar>::size == 0,
+      is_packet_size_multiple = MaxRows==Dynamic || MaxCols==Dynamic || ((MaxCols*MaxRows) % ei_packet_traits<Scalar>::size) == 0,
       aligned_bit = (((Options&DontAlign)==0) && (is_big || is_packet_size_multiple)) ? AlignedBit : 0,
       packet_access_bit = ei_packet_traits<Scalar>::size > 1 && aligned_bit ? PacketAccessBit : 0
     };
@@ -153,6 +155,19 @@ template<typename T> struct ei_plain_matrix_type_column_major
           > type;
 };
 
+/* ei_plain_matrix_type_row_major : same as ei_plain_matrix_type but guaranteed to be row-major
+ */
+template<typename T> struct ei_plain_matrix_type_row_major
+{
+  typedef Matrix<typename ei_traits<T>::Scalar,
+                ei_traits<T>::RowsAtCompileTime,
+                ei_traits<T>::ColsAtCompileTime,
+                AutoAlign | RowMajor,
+                ei_traits<T>::MaxRowsAtCompileTime,
+                ei_traits<T>::MaxColsAtCompileTime
+          > type;
+};
+
 template<typename T> struct ei_must_nest_by_value { enum { ret = false }; };
 template<typename T> struct ei_must_nest_by_value<NestByValue<T> > { enum { ret = true }; };
 
@@ -202,15 +217,15 @@ template<unsigned int Flags> struct ei_are_flags_consistent
   * overloads for complex types */
 template<typename Derived,typename Scalar,typename OtherScalar,
          bool EnableIt = !ei_is_same_type<Scalar,OtherScalar>::ret >
-struct ei_special_scalar_op_base
+struct ei_special_scalar_op_base : public AnyMatrixBase<Derived>
 {
-  // dummy operator* so that the 
+  // dummy operator* so that the
   // "using ei_special_scalar_op_base::operator*" compiles
   void operator*() const;
 };
 
 template<typename Derived,typename Scalar,typename OtherScalar>
-struct ei_special_scalar_op_base<Derived,Scalar,OtherScalar,true>
+struct ei_special_scalar_op_base<Derived,Scalar,OtherScalar,true>  : public AnyMatrixBase<Derived>
 {
   const CwiseUnaryOp<ei_scalar_multiple2_op<Scalar,OtherScalar>, Derived>
   operator*(const OtherScalar& scalar) const
@@ -218,14 +233,16 @@ struct ei_special_scalar_op_base<Derived,Scalar,OtherScalar,true>
     return CwiseUnaryOp<ei_scalar_multiple2_op<Scalar,OtherScalar>, Derived>
       (*static_cast<const Derived*>(this), ei_scalar_multiple2_op<Scalar,OtherScalar>(scalar));
   }
+
+  inline friend const CwiseUnaryOp<ei_scalar_multiple2_op<Scalar,OtherScalar>, Derived>
+  operator*(const OtherScalar& scalar, const Derived& matrix)
+  { return matrix*scalar; }
 };
 
 /** \internal Gives the type of a sub-matrix or sub-vector of a matrix of type \a ExpressionType and size \a Size
   * TODO: could be a good idea to define a big ReturnType struct ??
   */
 template<typename ExpressionType, int RowsOrSize=Dynamic, int Cols=Dynamic> struct BlockReturnType {
-  typedef Block<ExpressionType, (ei_traits<ExpressionType>::RowsAtCompileTime == 1 ? 1 : RowsOrSize),
-                                (ei_traits<ExpressionType>::ColsAtCompileTime == 1 ? 1 : RowsOrSize)> SubVectorType;
   typedef Block<ExpressionType, RowsOrSize, Cols> Type;
 };
 
@@ -238,7 +255,7 @@ template<typename ExpressionType> struct HNormalizedReturnType {
   typedef Block<ExpressionType,
                 ei_traits<ExpressionType>::ColsAtCompileTime==1 ? SizeMinusOne : 1,
                 ei_traits<ExpressionType>::ColsAtCompileTime==1 ? 1 : SizeMinusOne> StartMinusOne;
-  typedef CwiseUnaryOp<ei_scalar_quotient1_op<typename ei_traits<ExpressionType>::Scalar>, 
+  typedef CwiseUnaryOp<ei_scalar_quotient1_op<typename ei_traits<ExpressionType>::Scalar>,
               NestByValue<StartMinusOne> > Type;
 };
 

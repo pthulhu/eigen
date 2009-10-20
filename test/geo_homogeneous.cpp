@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -97,7 +97,7 @@ template<typename Scalar,int Size> void homogeneous(void)
   pts.setRandom(Size,5);
 
   Rt_pts1 = Rt * pts.colwise().homogeneous();
-  std::cerr << (Rt_pts1 - pts).sum() << "\n";
+  // std::cerr << (Rt_pts1 - pts).sum() << "\n";
   VERIFY_IS_MUCH_SMALLER_THAN( (Rt_pts1 - pts).sum(), Scalar(1));
 }
 

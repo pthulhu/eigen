@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2009 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -29,29 +29,35 @@
 struct ei_constructor_without_unaligned_array_assert {};
 
 /** \internal
-  * Static array automatically aligned if the total byte size is a multiple of 16 and the matrix options require auto alignment
+  * Static array. If the MatrixOptions require auto-alignment, the array will be automatically aligned:
+  * to 16 bytes boundary if the total size is a multiple of 16 bytes.
   */
 template <typename T, int Size, int MatrixOptions,
-          bool Align = (!(MatrixOptions&DontAlign)) && (((Size*sizeof(T))&0xf)==0)
-> struct ei_matrix_array
-{
-  EIGEN_ALIGN_128 T array[Size];
-
-  ei_matrix_array()
-  {
-    #ifndef EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
-    ei_assert((reinterpret_cast<size_t>(array) & 0xf) == 0
-              && "this assertion is explained here: http://eigen.tuxfamily.org/dox/UnalignedArrayAssert.html  **** READ THIS WEB PAGE !!! ****");
-    #endif
-  }
-
-  ei_matrix_array(ei_constructor_without_unaligned_array_assert) {}
-};
-
-template <typename T, int Size, int MatrixOptions> struct ei_matrix_array<T,Size,MatrixOptions,false>
+          int Alignment = (MatrixOptions&DontAlign) ? 0
+                        : (((Size*sizeof(T))%16)==0) ? 16
+                        : 0 >
+struct ei_matrix_array
 {
   T array[Size];
   ei_matrix_array() {}
+  ei_matrix_array(ei_constructor_without_unaligned_array_assert) {}
+};
+
+#ifdef EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
+  #define EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(sizemask)
+#else
+  #define EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(sizemask) \
+    ei_assert((reinterpret_cast<size_t>(array) & sizemask) == 0 \
+              && "this assertion is explained here: " \
+              "http://eigen.tuxfamily.org/dox/UnalignedArrayAssert.html" \
+              " **** READ THIS WEB PAGE !!! ****");
+#endif
+
+template <typename T, int Size, int MatrixOptions>
+struct ei_matrix_array<T, Size, MatrixOptions, 16>
+{
+  EIGEN_ALIGN16 T array[Size];
+  ei_matrix_array() { EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(0xf) }
   ei_matrix_array(ei_constructor_without_unaligned_array_assert) {}
 };
 
@@ -180,8 +186,8 @@ template<typename T, int _Options> class ei_matrix_storage<T, Dynamic, Dynamic, 
     inline ei_matrix_storage(ei_constructor_without_unaligned_array_assert)
        : m_data(0), m_rows(0), m_cols(0) {}
     inline ei_matrix_storage(int size, int rows, int cols)
-      : m_data(ei_aligned_new<T>(size)), m_rows(rows), m_cols(cols) {}
-    inline ~ei_matrix_storage() { ei_aligned_delete(m_data, m_rows*m_cols); }
+      : m_data(ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size)), m_rows(rows), m_cols(cols) {}
+    inline ~ei_matrix_storage() { ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, m_rows*m_cols); }
     inline void swap(ei_matrix_storage& other)
     { std::swap(m_data,other.m_data); std::swap(m_rows,other.m_rows); std::swap(m_cols,other.m_cols); }
     inline int rows(void) const {return m_rows;}
@@ -190,9 +196,9 @@ template<typename T, int _Options> class ei_matrix_storage<T, Dynamic, Dynamic, 
     {
       if(size != m_rows*m_cols)
       {
-        ei_aligned_delete(m_data, m_rows*m_cols);
+        ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, m_rows*m_cols);
         if (size)
-          m_data = ei_aligned_new<T>(size);
+          m_data = ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size);
         else
           m_data = 0;
       }
@@ -211,8 +217,8 @@ template<typename T, int _Rows, int _Options> class ei_matrix_storage<T, Dynamic
   public:
     inline explicit ei_matrix_storage() : m_data(0), m_cols(0) {}
     inline ei_matrix_storage(ei_constructor_without_unaligned_array_assert) : m_data(0), m_cols(0) {}
-    inline ei_matrix_storage(int size, int, int cols) : m_data(ei_aligned_new<T>(size)), m_cols(cols) {}
-    inline ~ei_matrix_storage() { ei_aligned_delete(m_data, _Rows*m_cols); }
+    inline ei_matrix_storage(int size, int, int cols) : m_data(ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size)), m_cols(cols) {}
+    inline ~ei_matrix_storage() { ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, _Rows*m_cols); }
     inline void swap(ei_matrix_storage& other) { std::swap(m_data,other.m_data); std::swap(m_cols,other.m_cols); }
     inline static int rows(void) {return _Rows;}
     inline int cols(void) const {return m_cols;}
@@ -220,9 +226,9 @@ template<typename T, int _Rows, int _Options> class ei_matrix_storage<T, Dynamic
     {
       if(size != _Rows*m_cols)
       {
-        ei_aligned_delete(m_data, _Rows*m_cols);
+        ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, _Rows*m_cols);
         if (size)
-          m_data = ei_aligned_new<T>(size);
+          m_data = ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size);
         else
           m_data = 0;
       }
@@ -240,8 +246,8 @@ template<typename T, int _Cols, int _Options> class ei_matrix_storage<T, Dynamic
   public:
     inline explicit ei_matrix_storage() : m_data(0), m_rows(0) {}
     inline ei_matrix_storage(ei_constructor_without_unaligned_array_assert) : m_data(0), m_rows(0) {}
-    inline ei_matrix_storage(int size, int rows, int) : m_data(ei_aligned_new<T>(size)), m_rows(rows) {}
-    inline ~ei_matrix_storage() { ei_aligned_delete(m_data, _Cols*m_rows); }
+    inline ei_matrix_storage(int size, int rows, int) : m_data(ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size)), m_rows(rows) {}
+    inline ~ei_matrix_storage() { ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, _Cols*m_rows); }
     inline void swap(ei_matrix_storage& other) { std::swap(m_data,other.m_data); std::swap(m_rows,other.m_rows); }
     inline int rows(void) const {return m_rows;}
     inline static int cols(void) {return _Cols;}
@@ -249,9 +255,9 @@ template<typename T, int _Cols, int _Options> class ei_matrix_storage<T, Dynamic
     {
       if(size != m_rows*_Cols)
       {
-        ei_aligned_delete(m_data, _Cols*m_rows);
+        ei_conditional_aligned_delete<T,(_Options&DontAlign)==0>(m_data, _Cols*m_rows);
         if (size)
-          m_data = ei_aligned_new<T>(size);
+          m_data = ei_conditional_aligned_new<T,(_Options&DontAlign)==0>(size);
         else
           m_data = 0;
       }

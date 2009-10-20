@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -42,11 +42,10 @@
   * This decomposition provides the generic approach to solving systems of linear equations, computing
   * the rank, invertibility, inverse, kernel, and determinant.
   *
-  * This LU decomposition is very stable and well tested with large matrices. Even exact rank computation
-  * works at sizes larger than 1000x1000. However there are use cases where the SVD decomposition is inherently
-  * more stable when dealing with numerically damaged input. For example, computing the kernel is more stable with
-  * SVD because the SVD can determine which singular values are negligible while LU has to work at the level of matrix
-  * coefficients that are less meaningful in this respect.
+  * This LU decomposition is very stable and well tested with large matrices. However there are use cases where the SVD
+  * decomposition is inherently more stable and/or flexible. For example, when computing the kernel of a matrix,
+  * working with the SVD allows to select the smallest singular values of the matrix, something that
+  * the LU decomposition doesn't see.
   *
   * The data of the LU decomposition can be directly accessed through the methods matrixLU(),
   * permutationP(), permutationQ().
@@ -92,11 +91,29 @@ template<typename MatrixType> class LU
                    MatrixType::MaxColsAtCompileTime  // so it has the same number of rows and at most as many columns.
     > ImageResultType;
 
+    /**
+    * \brief Default Constructor.
+    *
+    * The default constructor is useful in cases in which the user intends to
+    * perform decompositions via LU::compute(const MatrixType&).
+    */
+    LU();
+
     /** Constructor.
       *
       * \param matrix the matrix of which to compute the LU decomposition.
+      *               It is required to be nonzero.
       */
     LU(const MatrixType& matrix);
+
+    /** Computes the LU decomposition of the given matrix.
+      *
+      * \param matrix the matrix of which to compute the LU decomposition.
+      *               It is required to be nonzero.
+      *
+      * \returns a reference to *this
+      */
+    LU& compute(const MatrixType& matrix);
 
     /** \returns the LU decomposition matrix: the upper-triangular part is U, the
       * unit-lower-triangular part is L (at least for square matrices; in the non-square
@@ -106,6 +123,7 @@ template<typename MatrixType> class LU
       */
     inline const MatrixType& matrixLU() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_lu;
     }
 
@@ -117,6 +135,7 @@ template<typename MatrixType> class LU
       */
     inline const IntColVectorType& permutationP() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_p;
     }
 
@@ -128,6 +147,7 @@ template<typename MatrixType> class LU
       */
     inline const IntRowVectorType& permutationQ() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_q;
     }
 
@@ -214,7 +234,7 @@ template<typename MatrixType> class LU
       * Example: \include LU_solve.cpp
       * Output: \verbinclude LU_solve.out
       *
-      * \sa MatrixBase::solveTriangular(), kernel(), computeKernel(), inverse(), computeInverse()
+      * \sa TriangularView::solve(), kernel(), computeKernel(), inverse(), computeInverse()
       */
     template<typename OtherDerived, typename ResultType>
     bool solve(const MatrixBase<OtherDerived>& b, ResultType *result) const;
@@ -243,6 +263,7 @@ template<typename MatrixType> class LU
       */
     inline int rank() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_rank;
     }
 
@@ -253,6 +274,7 @@ template<typename MatrixType> class LU
       */
     inline int dimensionOfKernel() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_lu.cols() - m_rank;
     }
 
@@ -264,6 +286,7 @@ template<typename MatrixType> class LU
       */
     inline bool isInjective() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_rank == m_lu.cols();
     }
 
@@ -275,6 +298,7 @@ template<typename MatrixType> class LU
       */
     inline bool isSurjective() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return m_rank == m_lu.rows();
     }
 
@@ -285,6 +309,7 @@ template<typename MatrixType> class LU
       */
     inline bool isInvertible() const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
       return isInjective() && isSurjective();
     }
 
@@ -299,6 +324,8 @@ template<typename MatrixType> class LU
       */
     inline void computeInverse(MatrixType *result) const
     {
+      ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
+      ei_assert(m_lu.rows() == m_lu.cols() && "You can't take the inverse of a non-square matrix!");
       solve(MatrixType::Identity(m_lu.rows(), m_lu.cols()), result);
     }
 
@@ -317,7 +344,7 @@ template<typename MatrixType> class LU
     }
 
   protected:
-    const MatrixType& m_originalMatrix;
+    const MatrixType* m_originalMatrix;
     MatrixType m_lu;
     IntColVectorType m_p;
     IntRowVectorType m_q;
@@ -327,19 +354,45 @@ template<typename MatrixType> class LU
 };
 
 template<typename MatrixType>
-LU<MatrixType>::LU(const MatrixType& matrix)
-  : m_originalMatrix(matrix),
-    m_lu(matrix),
-    m_p(matrix.rows()),
-    m_q(matrix.cols())
+LU<MatrixType>::LU()
+  : m_originalMatrix(0),
+    m_lu(),
+    m_p(),
+    m_q(),
+    m_det_pq(0),
+    m_rank(-1),
+    m_precision(precision<RealScalar>())
 {
+}
+
+template<typename MatrixType>
+LU<MatrixType>::LU(const MatrixType& matrix)
+  : m_originalMatrix(0),
+    m_lu(),
+    m_p(),
+    m_q(),
+    m_det_pq(0),
+    m_rank(-1),
+    m_precision(precision<RealScalar>())
+{
+  compute(matrix);
+}
+
+template<typename MatrixType>
+LU<MatrixType>& LU<MatrixType>::compute(const MatrixType& matrix)
+{
+  m_originalMatrix = &matrix;
+  m_lu = matrix;
+  m_p.resize(matrix.rows());
+  m_q.resize(matrix.cols());
+
   const int size = matrix.diagonalSize();
   const int rows = matrix.rows();
   const int cols = matrix.cols();
-  
+
   // this formula comes from experimenting (see "LU precision tuning" thread on the list)
   // and turns out to be identical to Higham's formula used already in LDLt.
-  m_precision = machine_epsilon<Scalar>() * size;
+  m_precision = epsilon<Scalar>() * size;
 
   IntColVectorType rows_transpositions(matrix.rows());
   IntRowVectorType cols_transpositions(matrix.cols());
@@ -384,8 +437,7 @@ LU<MatrixType>::LU(const MatrixType& matrix)
     if(k<rows-1)
       m_lu.col(k).end(rows-k-1) /= m_lu.coeff(k,k);
     if(k<size-1)
-      for(int col = k + 1; col < cols; ++col)
-        m_lu.col(col).end(rows-k-1) -= m_lu.col(k).end(rows-k-1) * m_lu.coeff(k,col);
+      m_lu.block(k+1,k+1,rows-k-1,cols-k-1).noalias() -= m_lu.col(k).end(rows-k-1) * m_lu.row(k).end(cols-k-1);
   }
 
   for(int k = 0; k < matrix.rows(); ++k) m_p.coeffRef(k) = k;
@@ -397,11 +449,14 @@ LU<MatrixType>::LU(const MatrixType& matrix)
     std::swap(m_q.coeffRef(k), m_q.coeffRef(cols_transpositions.coeff(k)));
 
   m_det_pq = (number_of_transpositions%2) ? -1 : 1;
+  return *this;
 }
 
 template<typename MatrixType>
 typename ei_traits<MatrixType>::Scalar LU<MatrixType>::determinant() const
 {
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
+  ei_assert(m_lu.rows() == m_lu.cols() && "You can't take the determinant of a non-square matrix!");
   return Scalar(m_det_pq) * m_lu.diagonal().prod();
 }
 
@@ -409,7 +464,7 @@ template<typename MatrixType>
 template<typename KernelMatrixType>
 void LU<MatrixType>::computeKernel(KernelMatrixType *result) const
 {
-  ei_assert(!isInvertible());
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
   const int dimker = dimensionOfKernel(), cols = m_lu.cols();
   result->resize(cols, dimker);
 
@@ -434,8 +489,7 @@ void LU<MatrixType>::computeKernel(KernelMatrixType *result) const
     y(-m_lu.corner(TopRight, m_rank, dimker));
 
   m_lu.corner(TopLeft, m_rank, m_rank)
-      .template marked<UpperTriangular>()
-      .solveTriangularInPlace(y);
+      .template triangularView<UpperTriangular>().solveInPlace(y);
 
   for(int i = 0; i < m_rank; ++i) result->row(m_q.coeff(i)) = y.row(i);
   for(int i = m_rank; i < cols; ++i) result->row(m_q.coeff(i)).setZero();
@@ -446,6 +500,7 @@ template<typename MatrixType>
 const typename LU<MatrixType>::KernelResultType
 LU<MatrixType>::kernel() const
 {
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
   KernelResultType result(m_lu.cols(), dimensionOfKernel());
   computeKernel(&result);
   return result;
@@ -455,17 +510,18 @@ template<typename MatrixType>
 template<typename ImageMatrixType>
 void LU<MatrixType>::computeImage(ImageMatrixType *result) const
 {
-  ei_assert(m_rank > 0);
-  result->resize(m_originalMatrix.rows(), m_rank);
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
+  result->resize(m_originalMatrix->rows(), m_rank);
   for(int i = 0; i < m_rank; ++i)
-    result->col(i) = m_originalMatrix.col(m_q.coeff(i));
+    result->col(i) = m_originalMatrix->col(m_q.coeff(i));
 }
 
 template<typename MatrixType>
 const typename LU<MatrixType>::ImageResultType
 LU<MatrixType>::image() const
 {
-  ImageResultType result(m_originalMatrix.rows(), m_rank);
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
+  ImageResultType result(m_originalMatrix->rows(), m_rank);
   computeImage(&result);
   return result;
 }
@@ -477,6 +533,18 @@ bool LU<MatrixType>::solve(
   ResultType *result
 ) const
 {
+  ei_assert(m_originalMatrix != 0 && "LU is not initialized.");
+  result->resize(m_lu.cols(), b.cols());
+  if(m_rank==0)
+  {
+    if(b.squaredNorm() == RealScalar(0))
+    {
+      result->setZero();
+      return true;
+    }
+    else return false;
+  }
+  
   /* The decomposition PAQ = LU can be rewritten as A = P^{-1} L U Q^{-1}.
    * So we proceed as follows:
    * Step 1: compute c = Pb.
@@ -495,9 +563,9 @@ bool LU<MatrixType>::solve(
   for(int i = 0; i < rows; ++i) c.row(m_p.coeff(i)) = b.row(i);
 
   // Step 2
-  m_lu.corner(Eigen::TopLeft,smalldim,smalldim).template marked<UnitLowerTriangular>()
-    .solveTriangularInPlace(
-      c.corner(Eigen::TopLeft, smalldim, c.cols()));
+  m_lu.corner(Eigen::TopLeft,smalldim,smalldim)
+      .template triangularView<UnitLowerTriangular>()
+      .solveInPlace(c.corner(Eigen::TopLeft, smalldim, c.cols()));
   if(rows>cols)
   {
     c.corner(Eigen::BottomLeft, rows-cols, c.cols())
@@ -508,18 +576,16 @@ bool LU<MatrixType>::solve(
   if(!isSurjective())
   {
     // is c is in the image of U ?
-    RealScalar biggest_in_c = c.corner(TopLeft, m_rank, c.cols()).cwise().abs().maxCoeff();
-    for(int col = 0; col < c.cols(); ++col)
-      for(int row = m_rank; row < c.rows(); ++row)
-        if(!ei_isMuchSmallerThan(c.coeff(row,col), biggest_in_c, m_precision))
-          return false;
+    RealScalar biggest_in_upper_part_of_c = c.corner(TopLeft, m_rank, c.cols()).cwise().abs().maxCoeff();
+    RealScalar biggest_in_lower_part_of_c = c.corner(BottomLeft, rows-m_rank, c.cols()).cwise().abs().maxCoeff();
+    if(!ei_isMuchSmallerThan(biggest_in_lower_part_of_c, biggest_in_upper_part_of_c, m_precision))
+      return false;
   }
   m_lu.corner(TopLeft, m_rank, m_rank)
-      .template marked<UpperTriangular>()
-      .solveTriangularInPlace(c.corner(TopLeft, m_rank, c.cols()));
+      .template triangularView<UpperTriangular>()
+      .solveInPlace(c.corner(TopLeft, m_rank, c.cols()));
 
   // Step 4
-  result->resize(m_lu.cols(), b.cols());
   for(int i = 0; i < m_rank; ++i) result->row(m_q.coeff(i)) = c.row(i);
   for(int i = m_rank; i < m_lu.cols(); ++i) result->row(m_q.coeff(i)).setZero();
   return true;

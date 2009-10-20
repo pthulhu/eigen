@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -23,7 +23,7 @@
 // Eigen. If not, see <http://www.gnu.org/licenses/>.
 
 #include "main.h"
-#include <Eigen/QR>
+#include <Eigen/Eigenvalues>
 
 #ifdef HAS_GSL
 #include "gsl_helper.h"
@@ -57,8 +57,19 @@ template<typename MatrixType> void eigensolver(const MatrixType& m)
   EigenSolver<MatrixType> ei1(a);
   VERIFY_IS_APPROX(a * ei1.pseudoEigenvectors(), ei1.pseudoEigenvectors() * ei1.pseudoEigenvalueMatrix());
   VERIFY_IS_APPROX(a.template cast<Complex>() * ei1.eigenvectors(),
-                   ei1.eigenvectors() * ei1.eigenvalues().asDiagonal().eval());
+                   ei1.eigenvectors() * ei1.eigenvalues().asDiagonal());
 
+}
+
+template<typename MatrixType> void eigensolver_verify_assert()
+{
+  MatrixType tmp;
+
+  EigenSolver<MatrixType> eig;
+  VERIFY_RAISES_ASSERT(eig.eigenvectors())
+  VERIFY_RAISES_ASSERT(eig.pseudoEigenvectors())
+  VERIFY_RAISES_ASSERT(eig.pseudoEigenvalueMatrix())
+  VERIFY_RAISES_ASSERT(eig.eigenvalues())
 }
 
 void test_eigensolver_generic()
@@ -73,5 +84,9 @@ void test_eigensolver_generic()
     CALL_SUBTEST( eigensolver(Matrix<double,1,1>()) );
     CALL_SUBTEST( eigensolver(Matrix<double,2,2>()) );
   }
-}
 
+  CALL_SUBTEST( eigensolver_verify_assert<Matrix3f>() );
+  CALL_SUBTEST( eigensolver_verify_assert<Matrix3d>() );
+  CALL_SUBTEST( eigensolver_verify_assert<MatrixXf>() );
+  CALL_SUBTEST( eigensolver_verify_assert<MatrixXd>() );
+}

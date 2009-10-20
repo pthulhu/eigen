@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -62,10 +62,12 @@ struct ei_traits<Homogeneous<MatrixType,Direction> >
 template<typename MatrixType,typename Lhs> struct ei_homogeneous_left_product_impl;
 template<typename MatrixType,typename Rhs> struct ei_homogeneous_right_product_impl;
 
-template<typename MatrixType,int Direction> class Homogeneous
-  : public MatrixBase<Homogeneous<MatrixType,Direction> >
+template<typename MatrixType,int _Direction> class Homogeneous
+  : public MatrixBase<Homogeneous<MatrixType,_Direction> >
 {
   public:
+
+    enum { Direction = _Direction };
 
     EIGEN_GENERIC_PUBLIC_INTERFACE(Homogeneous)
 
@@ -73,13 +75,13 @@ template<typename MatrixType,int Direction> class Homogeneous
       : m_matrix(matrix)
     {}
 
-    inline int rows() const { return m_matrix.rows() + (Direction==Vertical   ? 1 : 0); }
-    inline int cols() const { return m_matrix.cols() + (Direction==Horizontal ? 1 : 0); }
+    inline int rows() const { return m_matrix.rows() + (int(Direction)==Vertical   ? 1 : 0); }
+    inline int cols() const { return m_matrix.cols() + (int(Direction)==Horizontal ? 1 : 0); }
 
     inline Scalar coeff(int row, int col) const
     {
-      if(  (Direction==Vertical   && row==m_matrix.rows())
-        || (Direction==Horizontal && col==m_matrix.cols()))
+      if(  (int(Direction)==Vertical   && row==m_matrix.rows())
+        || (int(Direction)==Horizontal && col==m_matrix.cols()))
         return 1;
       return m_matrix.coeff(row, col);
     }
@@ -88,7 +90,7 @@ template<typename MatrixType,int Direction> class Homogeneous
     inline const ei_homogeneous_right_product_impl<Homogeneous,Rhs>
     operator* (const MatrixBase<Rhs>& rhs) const
     {
-      ei_assert(Direction==Horizontal);
+      ei_assert(int(Direction)==Horizontal);
       return ei_homogeneous_right_product_impl<Homogeneous,Rhs>(m_matrix,rhs.derived());
     }
 
@@ -96,7 +98,7 @@ template<typename MatrixType,int Direction> class Homogeneous
     inline const ei_homogeneous_left_product_impl<Homogeneous,Lhs>
     operator* (const MatrixBase<Lhs>& lhs, const Homogeneous& rhs)
     {
-      ei_assert(Direction==Vertical);
+      ei_assert(int(Direction)==Vertical);
       return ei_homogeneous_left_product_impl<Homogeneous,Lhs>(lhs.derived(),rhs.m_matrix);
     }
 
@@ -105,7 +107,7 @@ template<typename MatrixType,int Direction> class Homogeneous
       typename Transform<Scalar,Dim,Mode>::AffinePartNested>
     operator* (const Transform<Scalar,Dim,Mode>& tr, const Homogeneous& rhs)
     {
-      ei_assert(Direction==Vertical);
+      ei_assert(int(Direction)==Vertical);
       return ei_homogeneous_left_product_impl<Homogeneous,typename Transform<Scalar,Dim,Mode>::AffinePartNested >
         (tr.affine(),rhs.m_matrix);
     }
@@ -115,7 +117,7 @@ template<typename MatrixType,int Direction> class Homogeneous
       typename Transform<Scalar,Dim,Projective>::MatrixType>
     operator* (const Transform<Scalar,Dim,Projective>& tr, const Homogeneous& rhs)
     {
-      ei_assert(Direction==Vertical);
+      ei_assert(int(Direction)==Vertical);
       return ei_homogeneous_left_product_impl<Homogeneous,typename Transform<Scalar,Dim,Projective>::MatrixType>
         (tr.matrix(),rhs.m_matrix);
     }
@@ -147,13 +149,13 @@ MatrixBase<Derived>::homogeneous() const
   * \nonstableyet
   * \returns a matrix expression of homogeneous column (or row) vectors
   *
-  * Example: \include PartialRedux_homogeneous.cpp
-  * Output: \verbinclude PartialRedux_homogeneous.out
+  * Example: \include VectorwiseOp_homogeneous.cpp
+  * Output: \verbinclude VectorwiseOp_homogeneous.out
   *
   * \sa MatrixBase::homogeneous() */
 template<typename ExpressionType, int Direction>
 inline const Homogeneous<ExpressionType,Direction>
-PartialRedux<ExpressionType,Direction>::homogeneous() const
+VectorwiseOp<ExpressionType,Direction>::homogeneous() const
 {
   return _expression();
 }
@@ -165,7 +167,7 @@ PartialRedux<ExpressionType,Direction>::homogeneous() const
   * Example: \include MatrixBase_hnormalized.cpp
   * Output: \verbinclude MatrixBase_hnormalized.out
   *
-  * \sa PartialRedux::hnormalized() */
+  * \sa VectorwiseOp::hnormalized() */
 template<typename Derived>
 inline const typename MatrixBase<Derived>::HNormalizedReturnType
 MatrixBase<Derived>::hnormalized() const
@@ -185,8 +187,8 @@ MatrixBase<Derived>::hnormalized() const
   *
   * \sa MatrixBase::hnormalized() */
 template<typename ExpressionType, int Direction>
-inline const typename PartialRedux<ExpressionType,Direction>::HNormalizedReturnType
-PartialRedux<ExpressionType,Direction>::hnormalized() const
+inline const typename VectorwiseOp<ExpressionType,Direction>::HNormalizedReturnType
+VectorwiseOp<ExpressionType,Direction>::hnormalized() const
 {
   return HNormalized_Block(_expression(),0,0,
       Direction==Vertical   ? _expression().rows()-1 : _expression().rows(),
@@ -205,15 +207,27 @@ PartialRedux<ExpressionType,Direction>::hnormalized() const
 }
 
 template<typename MatrixType,typename Lhs>
+struct ei_traits<ei_homogeneous_left_product_impl<Homogeneous<MatrixType,Vertical>,Lhs> >
+{
+  typedef Matrix<typename ei_traits<MatrixType>::Scalar,
+                 Lhs::RowsAtCompileTime,
+                 MatrixType::ColsAtCompileTime,
+                 MatrixType::PlainMatrixType::Options,
+                 Lhs::MaxRowsAtCompileTime,
+                 MatrixType::MaxColsAtCompileTime> ReturnMatrixType;
+};
+
+template<typename MatrixType,typename Lhs>
 struct ei_homogeneous_left_product_impl<Homogeneous<MatrixType,Vertical>,Lhs>
-  : public ReturnByValue<ei_homogeneous_left_product_impl<Homogeneous<MatrixType,Vertical>,Lhs>,
-                         Matrix<typename ei_traits<MatrixType>::Scalar,
-                                Lhs::RowsAtCompileTime,MatrixType::ColsAtCompileTime> >
+  : public ReturnByValue<ei_homogeneous_left_product_impl<Homogeneous<MatrixType,Vertical>,Lhs> >
 {
   typedef typename ei_cleantype<typename Lhs::Nested>::type LhsNested;
   ei_homogeneous_left_product_impl(const Lhs& lhs, const MatrixType& rhs)
     : m_lhs(lhs), m_rhs(rhs)
   {}
+
+  inline int rows() const { return m_lhs.rows(); }
+  inline int cols() const { return m_rhs.cols(); }
 
   template<typename Dest> void evalTo(Dest& dst) const
   {
@@ -231,15 +245,27 @@ struct ei_homogeneous_left_product_impl<Homogeneous<MatrixType,Vertical>,Lhs>
 };
 
 template<typename MatrixType,typename Rhs>
+struct ei_traits<ei_homogeneous_right_product_impl<Homogeneous<MatrixType,Horizontal>,Rhs> >
+{
+  typedef Matrix<typename ei_traits<MatrixType>::Scalar,
+                 MatrixType::RowsAtCompileTime,
+                 Rhs::ColsAtCompileTime,
+                 MatrixType::PlainMatrixType::Options,
+                 MatrixType::MaxRowsAtCompileTime,
+                 Rhs::MaxColsAtCompileTime> ReturnMatrixType;
+};
+
+template<typename MatrixType,typename Rhs>
 struct ei_homogeneous_right_product_impl<Homogeneous<MatrixType,Horizontal>,Rhs>
-  : public ReturnByValue<ei_homogeneous_right_product_impl<Homogeneous<MatrixType,Horizontal>,Rhs>,
-                         Matrix<typename ei_traits<MatrixType>::Scalar,
-                                MatrixType::RowsAtCompileTime, Rhs::ColsAtCompileTime> >
+  : public ReturnByValue<ei_homogeneous_right_product_impl<Homogeneous<MatrixType,Horizontal>,Rhs> >
 {
   typedef typename ei_cleantype<typename Rhs::Nested>::type RhsNested;
   ei_homogeneous_right_product_impl(const MatrixType& lhs, const Rhs& rhs)
     : m_lhs(lhs), m_rhs(rhs)
   {}
+
+  inline int rows() const { return m_lhs.rows(); }
+  inline int cols() const { return m_rhs.cols(); }
 
   template<typename Dest> void evalTo(Dest& dst) const
   {

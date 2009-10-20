@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -38,8 +38,6 @@
   * The following two typedefs are provided for convenience:
   * \li \c AngleAxisf for \c float
   * \li \c AngleAxisd for \c double
-  *
-  * \addexample AngleAxisForEuler \label How to define a rotation from Euler-angles
   *
   * Combined with MatrixBase::Unit{X,Y,Z}, AngleAxis can be used to easily
   * mimic Euler-angles. Here is an example:
@@ -85,7 +83,7 @@ public:
   AngleAxis() {}
   /** Constructs and initialize the angle-axis rotation from an \a angle in radian
     * and an \a axis which \b must \b be \b normalized.
-    * 
+    *
     * \warning If the \a axis vector is not normalized, then the angle-axis object
     *          represents an invalid rotation. */
   template<typename Derived>

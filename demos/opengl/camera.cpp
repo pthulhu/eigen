@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -260,7 +260,7 @@ void Camera::activateGL(void)
 
 Vector3f Camera::unProject(const Vector2f& uv, float depth) const
 {
-    Matrix4f inv = mViewMatrix.inverse();
+    Matrix4f inv = mViewMatrix.inverse().matrix();
     return unProject(uv, depth, inv);
 }
 

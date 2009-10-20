@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -24,6 +24,7 @@
 
 #include "main.h"
 #include <Eigen/SVD>
+#include <Eigen/LU>
 
 template<typename MatrixType> void svd(const MatrixType& m)
 {
@@ -40,16 +41,12 @@ template<typename MatrixType> void svd(const MatrixType& m)
     Matrix<Scalar, MatrixType::RowsAtCompileTime, 1>::Random(rows,1);
   Matrix<Scalar, MatrixType::ColsAtCompileTime, 1> x(cols,1), x2(cols,1);
 
-  RealScalar largerEps = test_precision<RealScalar>();
-  if (ei_is_same_type<RealScalar,float>::ret)
-    largerEps = 1e-3f;
-
   {
     SVD<MatrixType> svd(a);
     MatrixType sigma = MatrixType::Zero(rows,cols);
     MatrixType matU  = MatrixType::Zero(rows,rows);
-    sigma.block(0,0,cols,cols) = svd.singularValues().asDiagonal();
-    matU.block(0,0,rows,cols) = svd.matrixU();
+    sigma.diagonal() = svd.singularValues();
+    matU = svd.matrixU();
     VERIFY_IS_APPROX(a, matU * sigma * svd.matrixV().transpose());
   }
 
@@ -85,6 +82,21 @@ template<typename MatrixType> void svd(const MatrixType& m)
   }
 }
 
+template<typename MatrixType> void svd_verify_assert()
+{
+  MatrixType tmp;
+
+  SVD<MatrixType> svd;
+  VERIFY_RAISES_ASSERT(svd.solve(tmp, &tmp))
+  VERIFY_RAISES_ASSERT(svd.matrixU())
+  VERIFY_RAISES_ASSERT(svd.singularValues())
+  VERIFY_RAISES_ASSERT(svd.matrixV())
+  VERIFY_RAISES_ASSERT(svd.computeUnitaryPositive(&tmp,&tmp))
+  VERIFY_RAISES_ASSERT(svd.computePositiveUnitary(&tmp,&tmp))
+  VERIFY_RAISES_ASSERT(svd.computeRotationScaling(&tmp,&tmp))
+  VERIFY_RAISES_ASSERT(svd.computeScalingRotation(&tmp,&tmp))
+}
+
 void test_svd()
 {
   for(int i = 0; i < g_repeat; i++) {
@@ -96,4 +108,9 @@ void test_svd()
 //     CALL_SUBTEST( svd(MatrixXcd(6,6)) );
 //     CALL_SUBTEST( svd(MatrixXcf(3,3)) );
   }
+
+  CALL_SUBTEST( svd_verify_assert<Matrix3f>() );
+  CALL_SUBTEST( svd_verify_assert<Matrix3d>() );
+  CALL_SUBTEST( svd_verify_assert<MatrixXf>() );
+  CALL_SUBTEST( svd_verify_assert<MatrixXd>() );
 }

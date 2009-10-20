@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -244,6 +244,16 @@ inline void ei_palign(PacketType& first, const PacketType& second)
 {
   ei_palign_impl<Offset,PacketType>::run(first,second);
 }
+
+/***************************************************************************
+* Fast complex products (GCC generates a function call which is very slow)
+***************************************************************************/
+
+template<> inline std::complex<float> ei_pmul(const std::complex<float>& a, const std::complex<float>& b)
+{ return std::complex<float>(ei_real(a)*ei_real(b) - ei_imag(a)*ei_imag(b), ei_imag(a)*ei_real(b) + ei_real(a)*ei_imag(b)); }
+
+template<> inline std::complex<double> ei_pmul(const std::complex<double>& a, const std::complex<double>& b)
+{ return std::complex<double>(ei_real(a)*ei_real(b) - ei_imag(a)*ei_imag(b), ei_imag(a)*ei_real(b) + ei_real(a)*ei_imag(b)); }
 
 #endif // EIGEN_GENERIC_PACKET_MATH_H
 

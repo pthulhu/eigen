@@ -1,36 +1,42 @@
 project(Eigen)
-set(EIGEN_VERSION_NUMBER "2.0.52-unstable")
-
-#if the svnversion program is absent, this will leave the SVN_REVISION string empty,
-#but won't stop CMake.
-execute_process(COMMAND svnversion -n ${CMAKE_SOURCE_DIR}
-                OUTPUT_VARIABLE EIGEN_SVNVERSION_OUTPUT)
-
-#we only want EIGEN_SVN_REVISION if it is an actual revision number, not a string like "exported"
-string(REGEX MATCH "^[0-9]+.*" EIGEN_SVN_REVISION "${EIGEN_SVNVERSION_OUTPUT}")
-
-if(EIGEN_SVN_REVISION)
-  set(EIGEN_VERSION "${EIGEN_VERSION_NUMBER} (SVN revision ${EIGEN_SVN_REVISION})")
-else(EIGEN_SVN_REVISION)
-  set(EIGEN_VERSION "${EIGEN_VERSION_NUMBER}")
-endif(EIGEN_SVN_REVISION)
 
 cmake_minimum_required(VERSION 2.6.2)
+
+# automatically parse the version number
+file(READ "${CMAKE_SOURCE_DIR}/Eigen/src/Core/util/Macros.h" _eigen2_version_header LIMIT 5000 OFFSET 1000)
+string(REGEX MATCH "define *EIGEN_WORLD_VERSION ([0-9]*)" _eigen2_world_version_match "${_eigen2_version_header}")
+set(EIGEN2_WORLD_VERSION "${CMAKE_MATCH_1}")
+string(REGEX MATCH "define *EIGEN_MAJOR_VERSION ([0-9]*)" _eigen2_major_version_match "${_eigen2_version_header}")
+set(EIGEN2_MAJOR_VERSION "${CMAKE_MATCH_1}")
+string(REGEX MATCH "define *EIGEN_MINOR_VERSION ([0-9]*)" _eigen2_minor_version_match "${_eigen2_version_header}")
+set(EIGEN2_MINOR_VERSION "${CMAKE_MATCH_1}")
+set(EIGEN_VERSION_NUMBER ${EIGEN2_WORLD_VERSION}.${EIGEN2_MAJOR_VERSION}.${EIGEN2_MINOR_VERSION})
+
+# if the mercurial program is absent, this will leave the EIGEN_HG_CHANGESET string empty,
+# but won't stop CMake.
+execute_process(COMMAND hg tip -R ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE EIGEN_HGTIP_OUTPUT)
+execute_process(COMMAND hg branch -R ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE EIGEN_BRANCH_OUTPUT)
+
+# if this is the default (aka development) branch, extract the mercurial changeset number from the hg tip output...
+if(EIGEN_BRANCH_OUTPUT MATCHES "default")
+string(REGEX MATCH "^changeset: *[0-9]*:([0-9;a-f]+).*" EIGEN_HG_CHANGESET_MATCH "${EIGEN_HGTIP_OUTPUT}")
+set(EIGEN_HG_CHANGESET "${CMAKE_MATCH_1}")
+endif(EIGEN_BRANCH_OUTPUT MATCHES "default")
+#...and show it next to the version number
+if(EIGEN_HG_CHANGESET)
+  set(EIGEN_VERSION "${EIGEN_VERSION_NUMBER} (mercurial changeset ${EIGEN_HG_CHANGESET})")
+else(EIGEN_HG_CHANGESET)
+  set(EIGEN_VERSION "${EIGEN_VERSION_NUMBER}")
+endif(EIGEN_HG_CHANGESET)
 
 include(CheckCXXCompilerFlag)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-option(EIGEN_BUILD_TESTS "Build tests" OFF)
-option(EIGEN_BUILD_DEMOS "Build demos" OFF)
-if(NOT WIN32)
-  option(EIGEN_BUILD_LIB "Build the binary shared library" OFF)
-endif(NOT WIN32)
 option(EIGEN_BUILD_BTL "Build benchmark suite" OFF)
-
-if(EIGEN_BUILD_LIB)
-  option(EIGEN_TEST_LIB "Build the unit tests using the library (disable -pedantic)" OFF)
-endif(EIGEN_BUILD_LIB)
+if(NOT WIN32)
+  option(EIGEN_BUILD_PKGCONFIG "Build pkg-config .pc file for Eigen" ON)
+endif(NOT WIN32)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -79,7 +85,10 @@ if(MSVC)
 
   option(EIGEN_TEST_SSE2 "Enable/Disable SSE2 in tests/examples" OFF)
   if(EIGEN_TEST_SSE2)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:SSE2")
+    if(NOT CMAKE_CL_64)
+      # arch is not supported on 64 bit systems, SSE is enabled automatically.
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:SSE2")
+    endif(NOT CMAKE_CL_64)
     message("Enabling SSE2 in tests/examples")
   endif(EIGEN_TEST_SSE2)
 endif(MSVC)
@@ -90,33 +99,64 @@ if(EIGEN_TEST_NO_EXPLICIT_VECTORIZATION)
   message("Disabling vectorization in tests/examples")
 endif(EIGEN_TEST_NO_EXPLICIT_VECTORIZATION)
 
+option(EIGEN_TEST_C++0x "Enables all C++0x features." OFF)
+
+option(EIGEN_TEST_RVALUE_REF_SUPPORT "Enable rvalue references for unit tests." OFF)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 set(INCLUDE_INSTALL_DIR
     "${CMAKE_INSTALL_PREFIX}/include/eigen2"
     CACHE PATH
     "The directory where we install the header files"
-    FORCE)
+)
+
+if(EIGEN_BUILD_PKGCONFIG)
+    configure_file(eigen2.pc.in eigen2.pc)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/eigen2.pc
+        DESTINATION lib/pkgconfig
+        )
+endif(EIGEN_BUILD_PKGCONFIG)
 
 add_subdirectory(Eigen)
 
-add_subdirectory(doc)
+add_subdirectory(doc EXCLUDE_FROM_ALL)
 
-if(EIGEN_BUILD_TESTS)
-  include(CTest)
-  add_subdirectory(test)
-endif(EIGEN_BUILD_TESTS)
+include(CTest)
+enable_testing() # must be called from the root CMakeLists, see man page
+if(EIGEN_CMAKE_RUN_FROM_CTEST)
+add_subdirectory(test) # can't do EXCLUDE_FROM_ALL here, breaks CTest
+else(EIGEN_CMAKE_RUN_FROM_CTEST)
+add_subdirectory(test EXCLUDE_FROM_ALL)
+endif(EIGEN_CMAKE_RUN_FROM_CTEST)
 
 add_subdirectory(unsupported)
 
-if(EIGEN_BUILD_DEMOS)
-  add_subdirectory(demos)
-endif(EIGEN_BUILD_DEMOS)
+add_subdirectory(demos EXCLUDE_FROM_ALL)
 
+add_subdirectory(blas EXCLUDE_FROM_ALL)
+
+# TODO: consider also replacing EIGEN_BUILD_BTL by a custom target "make btl"?
 if(EIGEN_BUILD_BTL)
-  add_subdirectory(bench/btl)
+  add_subdirectory(bench/btl EXCLUDE_FROM_ALL)
 endif(EIGEN_BUILD_BTL)
 
-if(EIGEN_BUILD_TESTS)
-  ei_testing_print_summary()
-endif(EIGEN_BUILD_TESTS)
+ei_testing_print_summary()
+if(NOT MSVC_IDE)
+message("")
+message("Configured Eigen ${EIGEN_VERSION_NUMBER}")
+message("You can now do the following:")
+message("--------------+----------------------------------------------------------------")
+message("Command       |   Description")
+message("--------------+----------------------------------------------------------------")
+message("make install  | Install to ${CMAKE_INSTALL_PREFIX}")
+message("              | * To change that: cmake . -DCMAKE_INSTALL_PREFIX=yourpath")
+message("make btest    | Build the unit tests")
+message("              | * That takes lots of memory! Easy on the -j option")
+message("make test     | Build and run the unit tests (using CTest)")
+message("make test_qr  | Build a specific test, here test_qr. To run it: test/test_qr")
+message("make debug_qr | Build a test with full debug info. To run it: test/debug_qr")
+message("make blas     | Build BLAS library (not the same thing as Eigen)")
+message("make doc      | Generate the API documentation, requires Doxygen & LaTeX")
+message("--------------+----------------------------------------------------------------")
+endif(NOT MSVC_IDE)

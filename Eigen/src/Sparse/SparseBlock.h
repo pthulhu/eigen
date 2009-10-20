@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2008 Daniel Gomez Ferro <dgomezferro@gmail.com>
@@ -35,6 +35,8 @@ struct ei_traits<SparseInnerVectorSet<MatrixType, Size> >
     Flags = MatrixType::Flags,
     RowsAtCompileTime = IsRowMajor ? Size : MatrixType::RowsAtCompileTime,
     ColsAtCompileTime = IsRowMajor ? MatrixType::ColsAtCompileTime : Size,
+    MaxRowsAtCompileTime = RowsAtCompileTime,
+    MaxColsAtCompileTime = ColsAtCompileTime,
     CoeffReadCost = MatrixType::CoeffReadCost
   };
 };
@@ -43,16 +45,21 @@ template<typename MatrixType, int Size>
 class SparseInnerVectorSet : ei_no_assignment_operator,
   public SparseMatrixBase<SparseInnerVectorSet<MatrixType, Size> >
 {
-    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
   public:
+
+    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
 
     EIGEN_SPARSE_GENERIC_PUBLIC_INTERFACE(SparseInnerVectorSet)
     class InnerIterator: public MatrixType::InnerIterator
     {
       public:
         inline InnerIterator(const SparseInnerVectorSet& xpr, int outer)
-          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer)
+          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
         {}
+        inline int row() const { return IsRowMajor ? m_outer : this->index(); }
+        inline int col() const { return IsRowMajor ? this->index() : m_outer; }
+      protected:
+        int m_outer;
     };
 
     inline SparseInnerVectorSet(const MatrixType& matrix, int outerStart, int outerSize)
@@ -100,16 +107,21 @@ class SparseInnerVectorSet<DynamicSparseMatrix<_Scalar, _Options>, Size>
   : public SparseMatrixBase<SparseInnerVectorSet<DynamicSparseMatrix<_Scalar, _Options>, Size> >
 {
     typedef DynamicSparseMatrix<_Scalar, _Options> MatrixType;
-    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
   public:
+
+    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
 
     EIGEN_SPARSE_GENERIC_PUBLIC_INTERFACE(SparseInnerVectorSet)
     class InnerIterator: public MatrixType::InnerIterator
     {
       public:
         inline InnerIterator(const SparseInnerVectorSet& xpr, int outer)
-          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer)
+          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
         {}
+        inline int row() const { return IsRowMajor ? m_outer : this->index(); }
+        inline int col() const { return IsRowMajor ? this->index() : m_outer; }
+      protected:
+        int m_outer;
     };
 
     inline SparseInnerVectorSet(const MatrixType& matrix, int outerStart, int outerSize)
@@ -193,16 +205,21 @@ class SparseInnerVectorSet<SparseMatrix<_Scalar, _Options>, Size>
   : public SparseMatrixBase<SparseInnerVectorSet<SparseMatrix<_Scalar, _Options>, Size> >
 {
     typedef SparseMatrix<_Scalar, _Options> MatrixType;
-    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
   public:
+
+    enum { IsRowMajor = ei_traits<SparseInnerVectorSet>::IsRowMajor };
 
     EIGEN_SPARSE_GENERIC_PUBLIC_INTERFACE(SparseInnerVectorSet)
     class InnerIterator: public MatrixType::InnerIterator
     {
       public:
         inline InnerIterator(const SparseInnerVectorSet& xpr, int outer)
-          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer)
+          : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
         {}
+        inline int row() const { return IsRowMajor ? m_outer : this->index(); }
+        inline int col() const { return IsRowMajor ? this->index() : m_outer; }
+      protected:
+        int m_outer;
     };
 
     inline SparseInnerVectorSet(const MatrixType& matrix, int outerStart, int outerSize)

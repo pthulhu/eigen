@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -105,8 +105,8 @@ MatrixBase<Derived>::cross3(const MatrixBase<OtherDerived>& other) const
   * \sa MatrixBase::cross() */
 template<typename ExpressionType, int Direction>
 template<typename OtherDerived>
-const typename PartialRedux<ExpressionType,Direction>::CrossReturnType
-PartialRedux<ExpressionType,Direction>::cross(const MatrixBase<OtherDerived>& other) const
+const typename VectorwiseOp<ExpressionType,Direction>::CrossReturnType
+VectorwiseOp<ExpressionType,Direction>::cross(const MatrixBase<OtherDerived>& other) const
 {
   EIGEN_STATIC_ASSERT_VECTOR_SPECIFIC_SIZE(OtherDerived,3)
   EIGEN_STATIC_ASSERT((ei_is_same_type<Scalar, typename OtherDerived::Scalar>::ret),

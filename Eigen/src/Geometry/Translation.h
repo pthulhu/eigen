@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -93,7 +93,7 @@ public:
 
   /** Concatenates a translation and a linear transformation */
   template<typename OtherDerived>
-  inline AffineTransformType operator* (const MatrixBase<OtherDerived>& linear) const;
+  inline AffineTransformType operator* (const AnyMatrixBase<OtherDerived>& linear) const;
 
   /** Concatenates a translation and a rotation */
   template<typename Derived>
@@ -103,7 +103,7 @@ public:
   /** \returns the concatenation of a linear transformation \a l with the translation \a t */
   // its a nightmare to define a templated friend function outside its declaration
   template<typename OtherDerived> friend
-  inline AffineTransformType operator*(const MatrixBase<OtherDerived>& linear, const Translation& t)
+  inline AffineTransformType operator*(const AnyMatrixBase<OtherDerived>& linear, const Translation& t)
   {
     AffineTransformType res;
     res.matrix().setZero();
@@ -182,7 +182,7 @@ Translation<Scalar,Dim>::operator* (const UniformScaling<Scalar>& other) const
 template<typename Scalar, int Dim>
 template<typename OtherDerived>
 inline typename Translation<Scalar,Dim>::AffineTransformType
-Translation<Scalar,Dim>::operator* (const MatrixBase<OtherDerived>& linear) const
+Translation<Scalar,Dim>::operator* (const AnyMatrixBase<OtherDerived>& linear) const
 {
   AffineTransformType res;
   res.matrix().setZero();

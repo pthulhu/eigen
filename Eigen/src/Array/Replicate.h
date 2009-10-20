@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -45,14 +45,10 @@ struct ei_traits<Replicate<MatrixType,RowFactor,ColFactor> >
   typedef typename ei_nested<MatrixType>::type MatrixTypeNested;
   typedef typename ei_unref<MatrixTypeNested>::type _MatrixTypeNested;
   enum {
-    RowsPlusOne = (MatrixType::RowsAtCompileTime != Dynamic) ?
-                  int(MatrixType::RowsAtCompileTime) + 1 : Dynamic,
-    ColsPlusOne = (MatrixType::ColsAtCompileTime != Dynamic) ?
-                  int(MatrixType::ColsAtCompileTime) + 1 : Dynamic,
-    RowsAtCompileTime = RowFactor==Dynamic || MatrixType::RowsAtCompileTime==Dynamic
+    RowsAtCompileTime = RowFactor==Dynamic || int(MatrixType::RowsAtCompileTime)==Dynamic
                       ? Dynamic
                       : RowFactor * MatrixType::RowsAtCompileTime,
-    ColsAtCompileTime = ColFactor==Dynamic || MatrixType::ColsAtCompileTime==Dynamic
+    ColsAtCompileTime = ColFactor==Dynamic || int(MatrixType::ColsAtCompileTime)==Dynamic
                       ? Dynamic
                       : ColFactor * MatrixType::ColsAtCompileTime,
     MaxRowsAtCompileTime = RowsAtCompileTime,
@@ -69,15 +65,22 @@ template<typename MatrixType,int RowFactor,int ColFactor> class Replicate
 
     EIGEN_GENERIC_PUBLIC_INTERFACE(Replicate)
 
-    inline Replicate(const MatrixType& matrix)
+    template<typename OriginalMatrixType>
+    inline explicit Replicate(const OriginalMatrixType& matrix)
       : m_matrix(matrix), m_rowFactor(RowFactor), m_colFactor(ColFactor)
     {
+      EIGEN_STATIC_ASSERT((ei_is_same_type<MatrixType,OriginalMatrixType>::ret),
+                          THE_MATRIX_OR_EXPRESSION_THAT_YOU_PASSED_DOES_NOT_HAVE_THE_EXPECTED_TYPE)
       ei_assert(RowFactor!=Dynamic && ColFactor!=Dynamic);
     }
 
-    inline Replicate(const MatrixType& matrix, int rowFactor, int colFactor)
+    template<typename OriginalMatrixType>
+    inline Replicate(const OriginalMatrixType& matrix, int rowFactor, int colFactor)
       : m_matrix(matrix), m_rowFactor(rowFactor), m_colFactor(colFactor)
-    {}
+    {
+      EIGEN_STATIC_ASSERT((ei_is_same_type<MatrixType,OriginalMatrixType>::ret),
+                          THE_MATRIX_OR_EXPRESSION_THAT_YOU_PASSED_DOES_NOT_HAVE_THE_EXPECTED_TYPE)
+    }
 
     inline int rows() const { return m_matrix.rows() * m_rowFactor.value(); }
     inline int cols() const { return m_matrix.cols() * m_colFactor.value(); }
@@ -91,6 +94,9 @@ template<typename MatrixType,int RowFactor,int ColFactor> class Replicate
     const typename MatrixType::Nested m_matrix;
     const ei_int_if_dynamic<RowFactor> m_rowFactor;
     const ei_int_if_dynamic<ColFactor> m_colFactor;
+
+  private:
+    Replicate& operator=(const Replicate&);
 };
 
 /** \nonstableyet
@@ -99,14 +105,14 @@ template<typename MatrixType,int RowFactor,int ColFactor> class Replicate
   * Example: \include MatrixBase_replicate.cpp
   * Output: \verbinclude MatrixBase_replicate.out
   *
-  * \sa PartialRedux::replicate(), MatrixBase::replicate(int,int), class Replicate
+  * \sa VectorwiseOp::replicate(), MatrixBase::replicate(int,int), class Replicate
   */
 template<typename Derived>
 template<int RowFactor, int ColFactor>
 inline const Replicate<Derived,RowFactor,ColFactor>
 MatrixBase<Derived>::replicate() const
 {
-  return derived();
+  return Replicate<Derived,RowFactor,ColFactor>(derived());
 }
 
 /** \nonstableyet
@@ -115,7 +121,7 @@ MatrixBase<Derived>::replicate() const
   * Example: \include MatrixBase_replicate_int_int.cpp
   * Output: \verbinclude MatrixBase_replicate_int_int.out
   *
-  * \sa PartialRedux::replicate(), MatrixBase::replicate<int,int>(), class Replicate
+  * \sa VectorwiseOp::replicate(), MatrixBase::replicate<int,int>(), class Replicate
   */
 template<typename Derived>
 inline const Replicate<Derived,Dynamic,Dynamic>
@@ -130,30 +136,13 @@ MatrixBase<Derived>::replicate(int rowFactor,int colFactor) const
   * Example: \include DirectionWise_replicate_int.cpp
   * Output: \verbinclude DirectionWise_replicate_int.out
   *
-  * \sa PartialRedux::replicate(), MatrixBase::replicate(), class Replicate
+  * \sa VectorwiseOp::replicate(), MatrixBase::replicate(), class Replicate
   */
 template<typename ExpressionType, int Direction>
 const Replicate<ExpressionType,(Direction==Vertical?Dynamic:1),(Direction==Horizontal?Dynamic:1)>
-PartialRedux<ExpressionType,Direction>::replicate(int factor) const
+VectorwiseOp<ExpressionType,Direction>::replicate(int factor) const
 {
   return Replicate<ExpressionType,Direction==Vertical?Dynamic:1,Direction==Horizontal?Dynamic:1>
-          (_expression(),Direction==Vertical?factor:1,Direction==Horizontal?factor:1);
-}
-
-/** \nonstableyet
-  * \return an expression of the replication of each column (or row) of \c *this
-  *
-  * Example: \include DirectionWise_replicate.cpp
-  * Output: \verbinclude DirectionWise_replicate.out
-  *
-  * \sa PartialRedux::replicate(int), MatrixBase::replicate(), class Replicate
-  */
-template<typename ExpressionType, int Direction>
-template<int Factor>
-const Replicate<ExpressionType,(Direction==Vertical?Factor:1),(Direction==Horizontal?Factor:1)>
-PartialRedux<ExpressionType,Direction>::replicate(int factor) const
-{
-  return Replicate<ExpressionType,Direction==Vertical?Factor:1,Direction==Horizontal?Factor:1>
           (_expression(),Direction==Vertical?factor:1,Direction==Horizontal?factor:1);
 }
 

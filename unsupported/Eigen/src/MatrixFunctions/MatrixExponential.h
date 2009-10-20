@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
@@ -26,12 +26,12 @@
 #define EIGEN_MATRIX_EXPONENTIAL
 
 #ifdef _MSC_VER
-template <typename Scalar> Scalar log2(Scalar v) { return std::log(v)/std::log(Scalar(2)); }
+  template <typename Scalar> Scalar log2(Scalar v) { return std::log(v)/std::log(Scalar(2)); }
 #endif
 
-/** Compute the matrix exponential. 
+/** \brief Compute the matrix exponential. 
  *
- * \param M      matrix whose exponential is to be computed.
+ * \param M      matrix whose exponential is to be computed. 
  * \param result pointer to the matrix in which to store the result.
  *
  * The matrix exponential of \f$ M \f$ is defined by
@@ -58,103 +58,250 @@ template <typename Scalar> Scalar log2(Scalar v) { return std::log(v)/std::log(S
  * <em>SIAM J. %Matrix Anal. Applic.</em>, <b>26</b>:1179&ndash;1193,
  * 2005. 
  *
- * \note Currently, \p M has to be a matrix of \c double .
+ * \note \p M has to be a matrix of \c float, \c double, 
+ * \c complex<float> or \c complex<double> .
  */
 template <typename Derived>
-void ei_matrix_exponential(const MatrixBase<Derived> &M, typename ei_plain_matrix_type<Derived>::type* result)
-{
-  typedef typename ei_traits<Derived>::Scalar Scalar;
-  typedef typename NumTraits<Scalar>::Real RealScalar;
-  typedef typename ei_plain_matrix_type<Derived>::type PlainMatrixType;
+EIGEN_STRONG_INLINE void ei_matrix_exponential(const MatrixBase<Derived> &M, 
+					       typename MatrixBase<Derived>::PlainMatrixType* result);
 
-  ei_assert(M.rows() == M.cols());
-  EIGEN_STATIC_ASSERT(NumTraits<Scalar>::HasFloatingPoint,NUMERIC_TYPE_MUST_BE_FLOATING_POINT)
+/** \brief Class for computing the matrix exponential.*/
+template <typename MatrixType>
+class MatrixExponential {
 
-  PlainMatrixType num, den, U, V;
-  PlainMatrixType Id = PlainMatrixType::Identity(M.rows(), M.cols());
-  typename ei_eval<Derived>::type Meval = M.eval();
-  RealScalar l1norm = Meval.cwise().abs().colwise().sum().maxCoeff();
-  int squarings = 0;
+  public:
   
-  // Choose degree of Pade approximant, depending on norm of M
-  if (l1norm < 1.495585217958292e-002) {
-    
-    // Use (3,3)-Pade
-    const Scalar b[] = {120., 60., 12., 1.};
-    PlainMatrixType M2;
-    M2 = (Meval * Meval).lazy();
-    num = b[3]*M2 + b[1]*Id;
-    U = (Meval * num).lazy();
-    V = b[2]*M2 + b[0]*Id;
+    /** \brief Compute the matrix exponential. 
+     *
+     * \param M      matrix whose exponential is to be computed. 
+     * \param result pointer to the matrix in which to store the result.
+     */
+    MatrixExponential(const MatrixType &M, MatrixType *result);  
 
-  } else if (l1norm < 2.539398330063230e-001) {
+  private:
 
-    // Use (5,5)-Pade
-    const Scalar b[] = {30240., 15120., 3360., 420., 30., 1.};
-    PlainMatrixType M2, M4;
-    M2 = (Meval * Meval).lazy();
-    M4 = (M2 * M2).lazy();
-    num = b[5]*M4 + b[3]*M2 + b[1]*Id;
-    U = (Meval * num).lazy();
-    V = b[4]*M4 + b[2]*M2 + b[0]*Id;
+    // Prevent copying
+    MatrixExponential(const MatrixExponential&);
+    MatrixExponential& operator=(const MatrixExponential&);
 
-  } else if (l1norm < 9.504178996162932e-001) {
+    /** \brief Compute the (3,3)-Pad&eacute; approximant to the exponential.
+     *  
+     *  After exit, \f$ (V+U)(V-U)^{-1} \f$ is the Pad&eacute;
+     *  approximant of \f$ \exp(A) \f$ around \f$ A = 0 \f$.
+     *
+     *  \param A   Argument of matrix exponential
+     */
+    void pade3(const MatrixType &A);
 
-    // Use (7,7)-Pade
-    const Scalar b[] = {17297280., 8648640., 1995840., 277200., 25200., 1512., 56., 1.};
-    PlainMatrixType M2, M4, M6;
-    M2 = (Meval * Meval).lazy();
-    M4 = (M2 * M2).lazy();
-    M6 = (M4 * M2).lazy();
-    num = b[7]*M6 + b[5]*M4 + b[3]*M2 + b[1]*Id;
-    U = (Meval * num).lazy();
-    V = b[6]*M6 + b[4]*M4 + b[2]*M2 + b[0]*Id;
+    /** \brief Compute the (5,5)-Pad&eacute; approximant to the exponential.
+     *  
+     *  After exit, \f$ (V+U)(V-U)^{-1} \f$ is the Pad&eacute;
+     *  approximant of \f$ \exp(A) \f$ around \f$ A = 0 \f$.
+     *
+     *  \param A   Argument of matrix exponential
+     */
+    void pade5(const MatrixType &A);
 
-  } else if (l1norm < 2.097847961257068e+000) {
+    /** \brief Compute the (7,7)-Pad&eacute; approximant to the exponential.
+     *  
+     *  After exit, \f$ (V+U)(V-U)^{-1} \f$ is the Pad&eacute;
+     *  approximant of \f$ \exp(A) \f$ around \f$ A = 0 \f$.
+     *
+     *  \param A   Argument of matrix exponential
+     */
+    void pade7(const MatrixType &A);
 
-    // Use (9,9)-Pade
-    const Scalar b[] = {17643225600., 8821612800., 2075673600., 302702400., 30270240.,
-                         2162160., 110880., 3960., 90., 1.};
-    PlainMatrixType M2, M4, M6, M8;
-    M2 = (Meval * Meval).lazy();
-    M4 = (M2 * M2).lazy();
-    M6 = (M4 * M2).lazy();
-    M8 = (M6 * M2).lazy();
-    num = b[9]*M8 + b[7]*M6 + b[5]*M4 + b[3]*M2 + b[1]*Id;
-    U = (Meval * num).lazy();
-    V = b[8]*M8 + b[6]*M6 + b[4]*M4 + b[2]*M2 + b[0]*Id;
+    /** \brief Compute the (9,9)-Pad&eacute; approximant to the exponential.
+     *  
+     *  After exit, \f$ (V+U)(V-U)^{-1} \f$ is the Pad&eacute;
+     *  approximant of \f$ \exp(A) \f$ around \f$ A = 0 \f$.
+     *
+     *  \param A   Argument of matrix exponential
+     */
+    void pade9(const MatrixType &A);
 
+    /** \brief Compute the (13,13)-Pad&eacute; approximant to the exponential.
+     *  
+     *  After exit, \f$ (V+U)(V-U)^{-1} \f$ is the Pad&eacute;
+     *  approximant of \f$ \exp(A) \f$ around \f$ A = 0 \f$.
+     *
+     *  \param A   Argument of matrix exponential
+     */
+    void pade13(const MatrixType &A);
+
+    /** \brief Compute Pad&eacute; approximant to the exponential. 
+     *  
+     * Computes \c m_U, \c m_V and \c m_squarings such that 
+     * \f$ (V+U)(V-U)^{-1} \f$ is a Pad&eacute; of 
+     * \f$ \exp(2^{-\mbox{squarings}}M) \f$ around \f$ M = 0 \f$. The
+     * degree of the Pad&eacute; approximant and the value of
+     * squarings are chosen such that the approximation error is no
+     * more than the round-off error.
+     *
+     * The argument of this function should correspond with the (real
+     * part of) the entries of \c m_M.  It is used to select the
+     * correct implementation using overloading.
+     */
+    void computeUV(double);
+
+    /** \brief Compute Pad&eacute; approximant to the exponential. 
+     *
+     *  \sa computeUV(double);
+     */
+    void computeUV(float);
+
+    typedef typename ei_traits<MatrixType>::Scalar Scalar;
+    typedef typename NumTraits<typename ei_traits<MatrixType>::Scalar>::Real RealScalar;
+
+    /** \brief Pointer to matrix whose exponential is to be computed. */
+    const MatrixType* m_M; 
+
+    /** \brief Even-degree terms in numerator of Pad&eacute; approximant. */
+    MatrixType m_U;
+
+    /** \brief Odd-degree terms in numerator of Pad&eacute; approximant. */
+    MatrixType m_V;
+
+    /** \brief Used for temporary storage. */
+    MatrixType m_tmp1;
+
+    /** \brief Used for temporary storage. */
+    MatrixType m_tmp2;
+
+    /** \brief Identity matrix of the same size as \c m_M. */
+    MatrixType m_Id;
+
+    /** \brief Number of squarings required in the last step. */
+    int m_squarings;
+
+    /** \brief L1 norm of m_M. */
+    float m_l1norm;
+};
+
+template <typename MatrixType>
+MatrixExponential<MatrixType>::MatrixExponential(const MatrixType &M, MatrixType *result) :
+  m_M(&M), 
+  m_U(M.rows(),M.cols()), 
+  m_V(M.rows(),M.cols()), 
+  m_tmp1(M.rows(),M.cols()), 
+  m_tmp2(M.rows(),M.cols()), 
+  m_Id(MatrixType::Identity(M.rows(), M.cols())), 
+  m_squarings(0), 
+  m_l1norm(static_cast<float>(M.cwise().abs().colwise().sum().maxCoeff()))
+{
+  computeUV(RealScalar());
+  m_tmp1 = m_U + m_V;	// numerator of Pade approximant
+  m_tmp2 = -m_U + m_V;	// denominator of Pade approximant
+  m_tmp2.partialLu().solve(m_tmp1, result);
+  for (int i=0; i<m_squarings; i++)
+    *result *= *result;		// undo scaling by repeated squaring
+}
+
+template <typename MatrixType>
+EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade3(const MatrixType &A)
+{
+  const Scalar b[] = {120., 60., 12., 1.};
+  m_tmp1.noalias() = A * A;
+  m_tmp2 = b[3]*m_tmp1 + b[1]*m_Id;
+  m_U.noalias() = A * m_tmp2;
+  m_V = b[2]*m_tmp1 + b[0]*m_Id;
+}
+
+template <typename MatrixType>
+EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade5(const MatrixType &A)
+{
+  const Scalar b[] = {30240., 15120., 3360., 420., 30., 1.};
+  MatrixType A2 = A * A;
+  m_tmp1.noalias() = A2 * A2;
+  m_tmp2 = b[5]*m_tmp1 + b[3]*A2 + b[1]*m_Id;
+  m_U.noalias() = A * m_tmp2;
+  m_V = b[4]*m_tmp1 + b[2]*A2 + b[0]*m_Id;
+}
+
+template <typename MatrixType>
+EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade7(const MatrixType &A)
+{
+  const Scalar b[] = {17297280., 8648640., 1995840., 277200., 25200., 1512., 56., 1.};
+  MatrixType A2 = A * A;
+  MatrixType A4 = A2 * A2;
+  m_tmp1.noalias() = A4 * A2;
+  m_tmp2 = b[7]*m_tmp1 + b[5]*A4 + b[3]*A2 + b[1]*m_Id;
+  m_U.noalias() = A * m_tmp2;
+  m_V = b[6]*m_tmp1 + b[4]*A4 + b[2]*A2 + b[0]*m_Id;
+}
+
+template <typename MatrixType>
+EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade9(const MatrixType &A)
+{
+  const Scalar b[] = {17643225600., 8821612800., 2075673600., 302702400., 30270240.,
+  		      2162160., 110880., 3960., 90., 1.};
+  MatrixType A2 = A * A;
+  MatrixType A4 = A2 * A2;
+  MatrixType A6 = A4 * A2;
+  m_tmp1.noalias() = A6 * A2;
+  m_tmp2 = b[9]*m_tmp1 + b[7]*A6 + b[5]*A4 + b[3]*A2 + b[1]*m_Id;
+  m_U.noalias() = A * m_tmp2;
+  m_V = b[8]*m_tmp1 + b[6]*A6 + b[4]*A4 + b[2]*A2 + b[0]*m_Id;
+}
+
+template <typename MatrixType>
+EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade13(const MatrixType &A)
+{
+  const Scalar b[] = {64764752532480000., 32382376266240000., 7771770303897600., 
+  		      1187353796428800., 129060195264000., 10559470521600., 670442572800., 
+  		      33522128640., 1323241920., 40840800., 960960., 16380., 182., 1.};
+  MatrixType A2 = A * A;
+  MatrixType A4 = A2 * A2;
+  m_tmp1.noalias() = A4 * A2;
+  m_V = b[13]*m_tmp1 + b[11]*A4 + b[9]*A2; // used for temporary storage
+  m_tmp2.noalias() = m_tmp1 * m_V;
+  m_tmp2 += b[7]*m_tmp1 + b[5]*A4 + b[3]*A2 + b[1]*m_Id;
+  m_U.noalias() = A * m_tmp2;
+  m_tmp2 = b[12]*m_tmp1 + b[10]*A4 + b[8]*A2;
+  m_V.noalias() = m_tmp1 * m_tmp2;
+  m_V += b[6]*m_tmp1 + b[4]*A4 + b[2]*A2 + b[0]*m_Id;
+}
+
+template <typename MatrixType>
+void MatrixExponential<MatrixType>::computeUV(float)
+{
+  if (m_l1norm < 4.258730016922831e-001) {
+    pade3(*m_M);
+  } else if (m_l1norm < 1.880152677804762e+000) {
+    pade5(*m_M);
   } else {
-
-    // Use (13,13)-Pade; scale matrix by power of 2 so that its norm
-    // is small enough 
-
-    const Scalar maxnorm = 5.371920351148152;
-    const Scalar b[] = {64764752532480000., 32382376266240000., 7771770303897600., 
-			1187353796428800., 129060195264000., 10559470521600., 670442572800., 
-			33522128640., 1323241920., 40840800., 960960., 16380., 182., 1.};
-    
-    squarings = std::max(0, (int)ceil(log2(l1norm / maxnorm)));
-    PlainMatrixType A, A2, A4, A6;
-    A = Meval / pow(Scalar(2), squarings);
-    A2 = (A * A).lazy();
-    A4 = (A2 * A2).lazy();
-    A6 = (A4 * A2).lazy();
-    num = b[13]*A6 + b[11]*A4 + b[9]*A2;
-    V = (A6 * num).lazy();
-    num = V + b[7]*A6 + b[5]*A4 + b[3]*A2 + b[1]*Id;
-    U = (A * num).lazy();
-    num = b[12]*A6 + b[10]*A4 + b[8]*A2;
-    V = (A6 * num).lazy() + b[6]*A6 + b[4]*A4 + b[2]*A2 + b[0]*Id;
+    const float maxnorm = 3.925724783138660f;
+    m_squarings = std::max(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    MatrixType A = *m_M / std::pow(Scalar(2), m_squarings);
+    pade7(A);
   }
+}
 
-  num = U + V;			// numerator of Pade approximant
-  den = -U + V;			// denominator of Pade approximant
-  den.lu().solve(num, result);
+template <typename MatrixType>
+void MatrixExponential<MatrixType>::computeUV(double)
+{
+  if (m_l1norm < 1.495585217958292e-002) {
+    pade3(*m_M);
+  } else if (m_l1norm < 2.539398330063230e-001) {
+    pade5(*m_M);
+  } else if (m_l1norm < 9.504178996162932e-001) {
+    pade7(*m_M);
+  } else if (m_l1norm < 2.097847961257068e+000) {
+    pade9(*m_M);
+  } else {
+    const double maxnorm = 5.371920351148152;
+    m_squarings = std::max(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    MatrixType A = *m_M / std::pow(Scalar(2), m_squarings);
+    pade13(A);
+  }
+}
 
-  // Undo scaling by repeated squaring
-  for (int i=0; i<squarings; i++)
-    *result *= *result;
+template <typename Derived>
+EIGEN_STRONG_INLINE void ei_matrix_exponential(const MatrixBase<Derived> &M, 
+					       typename MatrixBase<Derived>::PlainMatrixType* result)
+{
+  ei_assert(M.rows() == M.cols());
+  MatrixExponential<typename MatrixBase<Derived>::PlainMatrixType>(M, result);
 }
 
 #endif // EIGEN_MATRIX_EXPONENTIAL

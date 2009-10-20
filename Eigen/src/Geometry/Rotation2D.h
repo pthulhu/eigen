@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -85,7 +85,7 @@ public:
 
   /** Concatenates two rotations */
   inline Rotation2D& operator*=(const Rotation2D& other)
-  { return m_angle += other.m_angle; }
+  { return m_angle += other.m_angle; return *this; }
 
   /** Applies the rotation to a 2D vector */
   Vector2 operator* (const Vector2& vec) const

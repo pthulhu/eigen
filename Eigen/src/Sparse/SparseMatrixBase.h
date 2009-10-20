@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
-// Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
+// Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,18 @@
 #ifndef EIGEN_SPARSEMATRIXBASE_H
 #define EIGEN_SPARSEMATRIXBASE_H
 
-template<typename Derived> class SparseMatrixBase
+/** \ingroup Sparse_Module
+  *
+  * \class SparseMatrixBase
+  *
+  * \brief Base class of any sparse matrices or sparse expressions
+  *
+  * \param Derived
+  *
+  *
+  *
+  */
+template<typename Derived> class SparseMatrixBase : public AnyMatrixBase<Derived>
 {
   public:
 
@@ -69,7 +80,7 @@ template<typename Derived> class SparseMatrixBase
         /**< This stores expression \ref flags flags which may or may not be inherited by new expressions
           * constructed from this one. See the \ref flags "list of flags".
           */
-      
+
       CoeffReadCost = ei_traits<Derived>::CoeffReadCost,
         /**< This is a rough measure of how expensive it is to read one coefficient from
           * this expression.
@@ -88,8 +99,10 @@ template<typename Derived> class SparseMatrixBase
     /** \internal the return type of MatrixBase::imag() */
     typedef SparseCwiseUnaryOp<ei_scalar_imag_op<Scalar>, Derived> ImagReturnType;
     /** \internal the return type of MatrixBase::adjoint() */
-    typedef SparseTranspose</*NestByValue<*/typename ei_cleantype<ConjugateReturnType>::type> /*>*/
-            AdjointReturnType;
+    typedef typename ei_meta_if<NumTraits<Scalar>::IsComplex,
+                        SparseCwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, SparseNestByValue<Eigen::SparseTranspose<Derived> > >,
+                        SparseTranspose<Derived>
+                     >::ret AdjointReturnType;
 
 #ifndef EIGEN_PARSED_BY_DOXYGEN
     /** This is the "real scalar" type; if the \a Scalar type is already real numbers
@@ -156,9 +169,9 @@ template<typename Derived> class SparseMatrixBase
       ei_assert(( ((ei_traits<Derived>::SupportedAccessPatterns&OuterRandomAccessPattern)==OuterRandomAccessPattern) ||
                   (!((Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit)))) &&
                   "the transpose operation is supposed to be handled in SparseMatrix::operator=");
-      
+
       enum { Flip = (Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit) };
-      
+
       const int outerSize = other.outerSize();
       //typedef typename ei_meta_if<transpose, LinkedVectorMatrix<Scalar,Flags&RowMajorBit>, Derived>::ret TempType;
       // thanks to shallow copies, we always eval to a tempary
@@ -290,16 +303,28 @@ template<typename Derived> class SparseMatrixBase
     { return matrix*scalar; }
 
 
+    // sparse * sparse
     template<typename OtherDerived>
     const typename SparseProductReturnType<Derived,OtherDerived>::Type
     operator*(const SparseMatrixBase<OtherDerived> &other) const;
-    
+
+    // sparse * diagonal
+    template<typename OtherDerived>
+    const SparseDiagonalProduct<Derived,OtherDerived>
+    operator*(const DiagonalBase<OtherDerived> &other) const;
+
+    // diagonal * sparse
+    template<typename OtherDerived> friend
+    const SparseDiagonalProduct<OtherDerived,Derived>
+    operator*(const DiagonalBase<OtherDerived> &lhs, const SparseMatrixBase& rhs)
+    { return SparseDiagonalProduct<OtherDerived,Derived>(lhs.derived(), rhs.derived()); }
+
     // dense * sparse (return a dense object)
-    template<typename OtherDerived> friend 
+    template<typename OtherDerived> friend
     const typename SparseProductReturnType<OtherDerived,Derived>::Type
     operator*(const MatrixBase<OtherDerived>& lhs, const Derived& rhs)
     { return typename SparseProductReturnType<OtherDerived,Derived>::Type(lhs.derived(),rhs); }
-    
+
     template<typename OtherDerived>
     const typename SparseProductReturnType<Derived,OtherDerived>::Type
     operator*(const MatrixBase<OtherDerived> &other) const;
@@ -331,7 +356,7 @@ template<typename Derived> class SparseMatrixBase
     SparseTranspose<Derived> transpose() { return derived(); }
     const SparseTranspose<Derived> transpose() const { return derived(); }
     // void transposeInPlace();
-    const AdjointReturnType adjoint() const { return conjugate()/*.nestByValue()*/; }
+    const AdjointReturnType adjoint() const { return transpose().nestByValue(); }
 
     // sub-vector
     SparseInnerVectorSet<Derived,1> row(int i);
@@ -340,7 +365,7 @@ template<typename Derived> class SparseMatrixBase
     const SparseInnerVectorSet<Derived,1> col(int j) const;
     SparseInnerVectorSet<Derived,1> innerVector(int outer);
     const SparseInnerVectorSet<Derived,1> innerVector(int outer) const;
-    
+
     // set of sub-vectors
     SparseInnerVectorSet<Derived,Dynamic> subrows(int start, int size);
     const SparseInnerVectorSet<Derived,Dynamic> subrows(int start, int size) const;
@@ -425,19 +450,19 @@ template<typename Derived> class SparseMatrixBase
 //     Derived& setRandom();
 //     Derived& setIdentity();
 
+      /** \internal use operator= */
+      template<typename DenseDerived>
+      void evalTo(MatrixBase<DenseDerived>& dst) const
+      {
+        dst.setZero();
+        for (int j=0; j<outerSize(); ++j)
+          for (typename Derived::InnerIterator i(derived(),j); i; ++i)
+            dst.coeffRef(i.row(),i.col()) = i.value();
+      }
+
       Matrix<Scalar,RowsAtCompileTime,ColsAtCompileTime> toDense() const
       {
-        Matrix<Scalar,RowsAtCompileTime,ColsAtCompileTime> res(rows(),cols());
-        res.setZero();
-        for (int j=0; j<outerSize(); ++j)
-        {
-          for (typename Derived::InnerIterator i(derived(),j); i; ++i)
-            if(IsRowMajor)
-              res.coeffRef(j,i.index()) = i.value();
-            else
-              res.coeffRef(i.index(),j) = i.value();
-        }
-        return res;
+        return derived();
       }
 
     template<typename OtherDerived>
@@ -490,7 +515,7 @@ template<typename Derived> class SparseMatrixBase
     { return typename ei_eval<Derived>::type(derived()); }
 
 //     template<typename OtherDerived>
-//     void swap(const MatrixBase<OtherDerived>& other);
+//     void swap(MatrixBase<OtherDerived> EIGEN_REF_TO_TEMPORARY other);
 
     template<unsigned int Added>
     const SparseFlagged<Derived, Added, 0> marked() const;
@@ -503,7 +528,7 @@ template<typename Derived> class SparseMatrixBase
       */
 //     inline int stride(void) const { return derived().stride(); }
 
-//     inline const NestByValue<Derived> nestByValue() const;
+    inline const SparseNestByValue<Derived> nestByValue() const;
 
 
     ConjugateReturnType conjugate() const;
@@ -545,8 +570,8 @@ template<typename Derived> class SparseMatrixBase
     bool all(void) const;
     bool any(void) const;
 
-    const PartialRedux<Derived,Horizontal> rowwise() const;
-    const PartialRedux<Derived,Vertical> colwise() const;
+    const VectorwiseOp<Derived,Horizontal> rowwise() const;
+    const VectorwiseOp<Derived,Vertical> colwise() const;
 
     static const CwiseNullaryOp<ei_scalar_random_op<Scalar>,Derived> Random(int rows, int cols);
     static const CwiseNullaryOp<ei_scalar_random_op<Scalar>,Derived> Random(int size);

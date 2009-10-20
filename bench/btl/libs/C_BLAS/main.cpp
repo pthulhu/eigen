@@ -24,6 +24,7 @@
 
 #include "action_cholesky.hh"
 #include "action_lu_decomp.hh"
+#include "action_partial_lu.hh"
 #include "action_trisolve_matrix.hh"
 
 #ifdef HAS_LAPACK
@@ -43,6 +44,9 @@ int main()
   bench<Action_symv<C_BLAS_interface<REAL_TYPE> > >(MIN_MV,MAX_MV,NB_POINT);
   bench<Action_syr2<C_BLAS_interface<REAL_TYPE> > >(MIN_MV,MAX_MV,NB_POINT);
 
+  bench<Action_ger<C_BLAS_interface<REAL_TYPE> > >(MIN_MV,MAX_MV,NB_POINT);
+  bench<Action_rot<C_BLAS_interface<REAL_TYPE> > >(MIN_AXPY,MAX_AXPY,NB_POINT);
+
   bench<Action_matrix_matrix_product<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
   bench<Action_ata_product<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
   bench<Action_aat_product<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
@@ -51,6 +55,7 @@ int main()
   bench<Action_trisolve_matrix<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
 
   bench<Action_cholesky<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
+  bench<Action_partial_lu<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);
 
   #ifdef HAS_LAPACK
   bench<Action_lu_decomp<C_BLAS_interface<REAL_TYPE> > >(MIN_MM,MAX_MM,NB_POINT);

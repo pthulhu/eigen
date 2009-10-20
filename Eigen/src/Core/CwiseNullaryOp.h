@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -64,10 +64,10 @@ class CwiseNullaryOp : ei_no_assignment_operator,
     CwiseNullaryOp(int rows, int cols, const NullaryOp& func = NullaryOp())
       : m_rows(rows), m_cols(cols), m_functor(func)
     {
-      ei_assert(rows > 0
-          && (RowsAtCompileTime == Dynamic || RowsAtCompileTime == rows)
-          && cols > 0
-          && (ColsAtCompileTime == Dynamic || ColsAtCompileTime == cols));
+      ei_assert(rows >= 0
+            && (RowsAtCompileTime == Dynamic || RowsAtCompileTime == rows)
+            &&  cols >= 0
+            && (ColsAtCompileTime == Dynamic || ColsAtCompileTime == cols));
     }
 
     EIGEN_STRONG_INLINE int rows() const { return m_rows.value(); }
@@ -147,7 +147,6 @@ EIGEN_STRONG_INLINE const CwiseNullaryOp<CustomNullaryOp, Derived>
 MatrixBase<Derived>::NullaryExpr(int size, const CustomNullaryOp& func)
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  ei_assert(IsVectorAtCompileTime);
   if(RowsAtCompileTime == 1) return CwiseNullaryOp<CustomNullaryOp, Derived>(1, size, func);
   else return CwiseNullaryOp<CustomNullaryOp, Derived>(size, 1, func);
 }
@@ -274,7 +273,7 @@ EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::setConstant(const Scalar& valu
   *
   * \only_for_vectors
   *
-  * Example: \include Matrix_set_int.cpp
+  * Example: \include Matrix_setConstant_int.cpp
   * Output: \verbinclude Matrix_setConstant_int.out
   *
   * \sa MatrixBase::setConstant(const Scalar&), setConstant(int,int,const Scalar&), class CwiseNullaryOp, MatrixBase::Constant(const Scalar&)
@@ -316,8 +315,6 @@ Matrix<_Scalar, _Rows, _Cols, _Options, _MaxRows, _MaxCols>::setConstant(int row
   * This variant is meant to be used for dynamic-size matrix types. For fixed-size types,
   * it is redundant to pass \a rows and \a cols as arguments, so Zero() should be used
   * instead.
-  *
-  * \addexample Zero \label How to take get a zero matrix
   *
   * Example: \include MatrixBase_zero_int_int.cpp
   * Output: \verbinclude MatrixBase_zero_int_int.out
@@ -448,8 +445,6 @@ Matrix<_Scalar, _Rows, _Cols, _Options, _MaxRows, _MaxCols>::setZero(int rows, i
   * it is redundant to pass \a rows and \a cols as arguments, so Ones() should be used
   * instead.
   *
-  * \addexample One \label How to get a matrix with all coefficients equal one
-  *
   * Example: \include MatrixBase_ones_int_int.cpp
   * Output: \verbinclude MatrixBase_ones_int_int.out
   *
@@ -575,8 +570,6 @@ Matrix<_Scalar, _Rows, _Cols, _Options, _MaxRows, _MaxCols>::setOnes(int rows, i
   * This variant is meant to be used for dynamic-size matrix types. For fixed-size types,
   * it is redundant to pass \a rows and \a cols as arguments, so Identity() should be used
   * instead.
-  *
-  * \addexample Identity \label How to get an identity matrix
   *
   * Example: \include MatrixBase_identity_int_int.cpp
   * Output: \verbinclude MatrixBase_identity_int_int.out

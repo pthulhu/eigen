@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -41,7 +41,7 @@ template<typename _Scalar> class AmbiVector
       resize(size);
     }
 
-    void init(RealScalar estimatedDensity);
+    void init(double estimatedDensity);
     void init(int mode);
 
     int nonZeros() const;
@@ -99,6 +99,8 @@ template<typename _Scalar> class AmbiVector
       allocSize = allocSize/sizeof(Scalar) + (allocSize%sizeof(Scalar)>0?1:0);
       Scalar* newBuffer = new Scalar[allocSize];
       memcpy(newBuffer,  m_buffer,  copyElements * sizeof(ListEl));
+      delete[] m_buffer;
+      m_buffer = newBuffer;
     }
 
   protected:
@@ -141,7 +143,7 @@ int AmbiVector<Scalar>::nonZeros() const
 }
 
 template<typename Scalar>
-void AmbiVector<Scalar>::init(RealScalar estimatedDensity)
+void AmbiVector<Scalar>::init(double estimatedDensity)
 {
   if (estimatedDensity>0.1)
     init(IsDense);
@@ -239,8 +241,11 @@ Scalar& AmbiVector<Scalar>::coeffRef(int i)
       else
       {
         if (m_llSize>=m_allocatedElements)
+        {
           reallocateSparse();
-        ei_internal_assert(m_llSize<m_size && "internal error: overflow in sparse mode");
+          llElements = reinterpret_cast<ListEl*>(m_buffer);
+        }
+        ei_internal_assert(m_llSize<m_allocatedElements && "internal error: overflow in sparse mode");
         // let's insert a new coefficient
         ListEl& el = llElements[m_llSize];
         el.value = Scalar(0);

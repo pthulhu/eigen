@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -102,7 +102,14 @@ template<typename Scalar, int Mode> void transformations(void)
     a = ei_random<Scalar>(-Scalar(0.4)*Scalar(M_PI), Scalar(0.4)*Scalar(M_PI));
   q1 = AngleAxisx(a, v0.normalized());
   Transform3 t0, t1, t2;
+
+  // first test setIdentity() and Identity()
   t0.setIdentity();
+  VERIFY_IS_APPROX(t0.matrix(), Transform3::MatrixType::Identity());
+  t0.matrix().setZero();
+  t0 = Transform3::Identity();
+  VERIFY_IS_APPROX(t0.matrix(), Transform3::MatrixType::Identity());
+  
   t0.linear() = q1.toRotationMatrix();
   t1.setIdentity();
   t1.linear() = q1.toRotationMatrix();
@@ -148,7 +155,6 @@ template<typename Scalar, int Mode> void transformations(void)
   Transform3 tmat3(mat3), tmat4(mat4);
   if(Mode!=int(AffineCompact))
     tmat4.matrix()(3,3) = Scalar(1);
-  std::cerr << tmat3.matrix() << "\n\n" << tmat4.matrix() << "\n\n";
   VERIFY_IS_APPROX(tmat3.matrix(), tmat4.matrix());
 
   Scalar a3 = ei_random<Scalar>(-Scalar(M_PI), Scalar(M_PI));
@@ -297,10 +303,10 @@ template<typename Scalar, int Mode> void transformations(void)
     t0.setIdentity();
     t0.translate(v0);
     t0.linear().setRandom();
-    VERIFY_IS_APPROX(t0.inverse(Affine), t0.matrix().inverse());
+    VERIFY_IS_APPROX(t0.inverse(Affine).matrix(), t0.matrix().inverse());
     t0.setIdentity();
     t0.translate(v0).rotate(q1);
-    VERIFY_IS_APPROX(t0.inverse(Isometry), t0.matrix().inverse());
+    VERIFY_IS_APPROX(t0.inverse(Isometry).matrix(), t0.matrix().inverse());
   }
 
   // test extract rotation and aligned scaling
@@ -331,12 +337,6 @@ template<typename Scalar, int Mode> void transformations(void)
   VERIFY_IS_APPROX(tr1f.template cast<Scalar>(),tr1);
   Translation<double,3> tr1d = tr1.template cast<double>();
   VERIFY_IS_APPROX(tr1d.template cast<Scalar>(),tr1);
-
-  AlignedScaling3 sc1(v0);
-  DiagonalMatrix<float,3> sc1f; sc1f = sc1.template cast<float>();
-  VERIFY_IS_APPROX(sc1f.template cast<Scalar>(),sc1);
-  DiagonalMatrix<double,3> sc1d; sc1d = (sc1.template cast<double>());
-  VERIFY_IS_APPROX(sc1d.template cast<Scalar>(),sc1);
 
   AngleAxis<float> aa1f = aa1.template cast<float>();
   VERIFY_IS_APPROX(aa1f.template cast<Scalar>(),aa1);

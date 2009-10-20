@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2007 Michael Olbrich <michael.olbrich@gmx.net>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -57,7 +57,10 @@ private:
                   && ((int(Derived::Flags)&RowMajorBit)==(int(OtherDerived::Flags)&RowMajorBit)),
     MayInnerVectorize  = MightVectorize && int(InnerSize)!=Dynamic && int(InnerSize)%int(PacketSize)==0
                        && int(DstIsAligned) && int(SrcIsAligned),
-    MayLinearVectorize = MightVectorize && (int(Derived::Flags) & int(OtherDerived::Flags) & LinearAccessBit),
+    MayLinearVectorize = MightVectorize && (int(Derived::Flags) & int(OtherDerived::Flags) & LinearAccessBit)
+                                        && (DstIsAligned || InnerMaxSize == Dynamic),/* If the destination isn't aligned,
+      we have to do runtime checks and we don't unroll, so it's only good for large enough sizes. See remark below
+      about InnerMaxSize. */
     MaySliceVectorize  = MightVectorize && int(InnerMaxSize)>=3*PacketSize /* slice vectorization can be slow, so we only
       want it if the slices are big, which is indicated by InnerMaxSize rather than InnerSize, think of the case
       of a dynamic block in a fixed-size matrix */
@@ -90,6 +93,25 @@ public:
               ? ( int(MayUnrollCompletely) && int(DstIsAligned) ? int(CompleteUnrolling) : int(NoUnrolling) )
               : int(NoUnrolling)
   };
+  
+  static void debug()
+  {
+    EIGEN_DEBUG_VAR(DstIsAligned)
+    EIGEN_DEBUG_VAR(SrcIsAligned)
+    EIGEN_DEBUG_VAR(SrcAlignment)
+    EIGEN_DEBUG_VAR(InnerSize)
+    EIGEN_DEBUG_VAR(InnerMaxSize)
+    EIGEN_DEBUG_VAR(PacketSize)
+    EIGEN_DEBUG_VAR(MightVectorize)
+    EIGEN_DEBUG_VAR(MayInnerVectorize)
+    EIGEN_DEBUG_VAR(MayLinearVectorize)
+    EIGEN_DEBUG_VAR(MaySliceVectorize)
+    EIGEN_DEBUG_VAR(Vectorization)
+    EIGEN_DEBUG_VAR(UnrollingLimit)
+    EIGEN_DEBUG_VAR(MayUnrollCompletely)
+    EIGEN_DEBUG_VAR(MayUnrollInner)
+    EIGEN_DEBUG_VAR(Unrolling)
+  }
 };
 
 /***************************************************************************
@@ -405,6 +427,9 @@ EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>
     YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
   ei_assert(rows() == other.rows() && cols() == other.cols());
   ei_assign_impl<Derived, OtherDerived>::run(derived(),other.derived());
+#ifdef EIGEN_DEBUG_ASSIGN
+  ei_assign_traits<Derived, OtherDerived>::debug();
+#endif
   return derived();
 }
 
@@ -412,8 +437,10 @@ template<typename Derived, typename OtherDerived,
          bool EvalBeforeAssigning = (int(OtherDerived::Flags) & EvalBeforeAssigningBit) != 0,
          bool NeedToTranspose = Derived::IsVectorAtCompileTime
                 && OtherDerived::IsVectorAtCompileTime
-                && int(Derived::RowsAtCompileTime) == int(OtherDerived::ColsAtCompileTime)
-                && int(Derived::ColsAtCompileTime) == int(OtherDerived::RowsAtCompileTime)
+                && ((int(Derived::RowsAtCompileTime) == 1 && int(OtherDerived::ColsAtCompileTime) == 1)
+                      |  // FIXME | instead of || to please GCC 4.4.0 stupid warning "suggest parentheses around &&".
+                         // revert to || as soon as not needed anymore.
+                    (int(Derived::ColsAtCompileTime) == 1 && int(OtherDerived::RowsAtCompileTime) == 1))
                 && int(Derived::SizeAtCompileTime) != 1>
 struct ei_assign_selector;
 
@@ -436,10 +463,16 @@ struct ei_assign_selector<Derived,OtherDerived,true,true> {
 
 template<typename Derived>
 template<typename OtherDerived>
-EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>
-  ::operator=(const MatrixBase<OtherDerived>& other)
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const MatrixBase<OtherDerived>& other)
 {
   return ei_assign_selector<Derived,OtherDerived>::run(derived(), other.derived());
 }
+
+template<typename Derived>
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const MatrixBase& other)
+{
+  return ei_assign_selector<Derived,Derived>::run(derived(), other.derived());
+}
+
 
 #endif // EIGEN_ASSIGN_H

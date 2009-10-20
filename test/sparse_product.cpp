@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Daniel Gomez Ferro <dgomezferro@gmail.com>
 //
@@ -118,7 +118,6 @@ template<typename SparseMatrixType> void sparse_product(const SparseMatrixType& 
     VERIFY_IS_APPROX(x=mLo.template marked<LowerTriangular|SelfAdjoint>()*b, refX=refS*b);
     VERIFY_IS_APPROX(x=mS.template marked<SelfAdjoint>()*b, refX=refS*b);
   }
-
 }
 
 void test_sparse_product()

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008-2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -25,17 +25,24 @@
 #ifndef EIGEN_SPARSEMATRIX_H
 #define EIGEN_SPARSEMATRIX_H
 
-/** \class SparseMatrix
+/** \ingroup Sparse_Module
   *
-  * \brief Sparse matrix
+  * \class SparseMatrix
+  *
+  * \brief The main sparse matrix class
+  *
+  * This class implements a sparse matrix using the very common compressed row/column storage
+  * scheme.
   *
   * \param _Scalar the scalar type, i.e. the type of the coefficients
+  * \param _Options Union of bit flags controlling the storage scheme. Currently the only possibility
+  *                 is RowMajor. The default is 0 which means column-major.
   *
   * See http://www.netlib.org/linalg/html_templates/node91.html for details on the storage scheme.
   *
   */
-template<typename _Scalar, int _Flags>
-struct ei_traits<SparseMatrix<_Scalar, _Flags> >
+template<typename _Scalar, int _Options>
+struct ei_traits<SparseMatrix<_Scalar, _Options> >
 {
   typedef _Scalar Scalar;
   enum {
@@ -43,17 +50,15 @@ struct ei_traits<SparseMatrix<_Scalar, _Flags> >
     ColsAtCompileTime = Dynamic,
     MaxRowsAtCompileTime = Dynamic,
     MaxColsAtCompileTime = Dynamic,
-    Flags = SparseBit | _Flags,
+    Flags = SparseBit | _Options,
     CoeffReadCost = NumTraits<Scalar>::ReadCost,
     SupportedAccessPatterns = InnerRandomAccessPattern
   };
 };
 
-
-
-template<typename _Scalar, int _Flags>
+template<typename _Scalar, int _Options>
 class SparseMatrix
-  : public SparseMatrixBase<SparseMatrix<_Scalar, _Flags> >
+  : public SparseMatrixBase<SparseMatrix<_Scalar, _Options> >
 {
   public:
     EIGEN_SPARSE_GENERIC_PUBLIC_INTERFACE(SparseMatrix)
@@ -64,10 +69,10 @@ class SparseMatrix
     // EIGEN_SPARSE_INHERIT_SCALAR_ASSIGNMENT_OPERATOR(SparseMatrix, /=)
 
     typedef MappedSparseMatrix<Scalar,Flags> Map;
+    using Base::IsRowMajor;
 
   protected:
 
-    enum { IsRowMajor = Base::IsRowMajor };
     typedef SparseMatrix<Scalar,(Flags&~RowMajorBit)|(IsRowMajor?RowMajorBit:0)> TransposedSparseMatrix;
 
     int m_outerSize;
@@ -358,19 +363,21 @@ class SparseMatrix
       m_data.resize(k,0);
     }
 
+    /** Resizes the matrix to a \a rows x \a cols matrix and initializes it to zero
+      * \sa resizeNonZeros(int), reserve(), setZero()
+      */
     void resize(int rows, int cols)
     {
-//       std::cerr << this << " resize " << rows << "x" << cols << "\n";
       const int outerSize = IsRowMajor ? rows : cols;
       m_innerSize = IsRowMajor ? cols : rows;
       m_data.clear();
-      if (m_outerSize != outerSize)
+      if (m_outerSize != outerSize || m_outerSize==0)
       {
         delete[] m_outerIndex;
         m_outerIndex = new int [outerSize+1];
         m_outerSize = outerSize;
-        memset(m_outerIndex, 0, (m_outerSize+1)*sizeof(int));
       }
+      memset(m_outerIndex, 0, (m_outerSize+1)*sizeof(int));
     }
     void resizeNonZeros(int size)
     {
@@ -436,9 +443,8 @@ class SparseMatrix
         // two passes algorithm:
         //  1 - compute the number of coeffs per dest inner vector
         //  2 - do the actual copy/eval
-        // Since each coeff of the rhs has to be evaluated twice, let's evauluate it if needed
-        //typedef typename ei_nested<OtherDerived,2>::type OtherCopy;
-        typedef typename ei_eval<OtherDerived>::type OtherCopy;
+        // Since each coeff of the rhs has to be evaluated twice, let's evaluate it if needed
+        typedef typename ei_nested<OtherDerived,2>::type OtherCopy;
         typedef typename ei_cleantype<OtherCopy>::type _OtherCopy;
         OtherCopy otherCopy(other.derived());
 
@@ -508,10 +514,13 @@ class SparseMatrix
     {
       delete[] m_outerIndex;
     }
+
+    /** Overloaded for performance */
+    Scalar sum() const;
 };
 
-template<typename Scalar, int _Flags>
-class SparseMatrix<Scalar,_Flags>::InnerIterator
+template<typename Scalar, int _Options>
+class SparseMatrix<Scalar,_Options>::InnerIterator
 {
   public:
     InnerIterator(const SparseMatrix& mat, int outer)

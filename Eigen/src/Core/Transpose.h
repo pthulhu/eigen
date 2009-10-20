@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -70,7 +70,9 @@ template<typename MatrixType> class Transpose
     inline int rows() const { return m_matrix.cols(); }
     inline int cols() const { return m_matrix.rows(); }
     inline int nonZeros() const { return m_matrix.nonZeros(); }
-    inline int stride(void) const { return m_matrix.stride(); }
+    inline int stride() const { return m_matrix.stride(); }
+    inline Scalar* data() { return m_matrix.data(); }
+    inline const Scalar* data() const { return m_matrix.data(); }
 
     inline Scalar& coeffRef(int row, int col)
     {
@@ -115,6 +117,10 @@ template<typename MatrixType> class Transpose
     {
       m_matrix.const_cast_derived().template writePacket<LoadMode>(index, x);
     }
+
+    /** \internal used for introspection */
+    const typename ei_cleantype<typename MatrixType::Nested>::type&
+    _expression() const { return m_matrix; }
 
   protected:
     const typename MatrixType::Nested m_matrix;
@@ -181,7 +187,7 @@ template<typename Derived>
 inline const typename MatrixBase<Derived>::AdjointReturnType
 MatrixBase<Derived>::adjoint() const
 {
-  return conjugate().nestByValue();
+  return transpose().nestByValue();
 }
 
 /***************************************************************************
@@ -195,7 +201,7 @@ struct ei_inplace_transpose_selector;
 template<typename MatrixType>
 struct ei_inplace_transpose_selector<MatrixType,true> { // square matrix
   static void run(MatrixType& m) {
-    m.template part<StrictlyUpperTriangular>().swap(m.transpose());
+    m.template triangularView<StrictlyUpperTriangular>().swap(m.transpose());
   }
 };
 
@@ -203,7 +209,7 @@ template<typename MatrixType>
 struct ei_inplace_transpose_selector<MatrixType,false> { // non square matrix
   static void run(MatrixType& m) {
     if (m.rows()==m.cols())
-      m.template part<StrictlyUpperTriangular>().swap(m.transpose());
+      m.template triangularView<StrictlyUpperTriangular>().swap(m.transpose());
     else
       m = m.transpose().eval();
   }
@@ -261,4 +267,92 @@ inline void MatrixBase<Derived>::adjointInPlace()
   derived() = adjoint().eval();
 }
 
+#ifndef EIGEN_NO_DEBUG
+
+// The following is to detect aliasing problems in the following common cases:
+// a = a.transpose()
+// a = a.transpose() + X
+// a = X + a.transpose()
+// a = a.adjoint()
+// a = a.adjoint() + X
+// a = X + a.adjoint()
+
+template<typename T, int Access=ei_blas_traits<T>::ActualAccess>
+struct ei_extract_data_selector {
+  static typename T::Scalar* run(const T& m)
+  {
+    return &ei_blas_traits<T>::extract(m).const_cast_derived().coeffRef(0,0);
+  }
+};
+
+template<typename T>
+struct ei_extract_data_selector<T,NoDirectAccess> {
+  static typename T::Scalar* run(const T&) { return 0; }
+};
+
+template<typename T> typename T::Scalar* ei_extract_data(const T& m)
+{
+  return ei_extract_data_selector<T>::run(m);
+}
+
+template<typename Derived>
+template<typename OtherDerived>
+Derived& MatrixBase<Derived>::lazyAssign(const Transpose<OtherDerived>& other)
+{
+  ei_assert(ei_extract_data(other) != ei_extract_data(derived())
+            && "aliasing detected during tranposition, please use transposeInPlace()");
+  return lazyAssign(static_cast<const MatrixBase<Transpose<OtherDerived> >& >(other));
+}
+
+template<typename Derived>
+template<typename DerivedA, typename DerivedB>
+Derived& MatrixBase<Derived>::
+lazyAssign(const CwiseBinaryOp<ei_scalar_sum_op<Scalar>,Transpose<DerivedA>,DerivedB>& other)
+{
+  ei_assert(ei_extract_data(derived()) != ei_extract_data(other.lhs())
+            && "aliasing detected during tranposition, please evaluate your expression");
+  return lazyAssign(static_cast<const MatrixBase<CwiseBinaryOp<ei_scalar_sum_op<Scalar>,Transpose<DerivedA>,DerivedB> >& >(other));
+}
+
+template<typename Derived>
+template<typename DerivedA, typename DerivedB>
+Derived& MatrixBase<Derived>::
+lazyAssign(const CwiseBinaryOp<ei_scalar_sum_op<Scalar>,DerivedA,Transpose<DerivedB> >& other)
+{
+  ei_assert(ei_extract_data(derived()) != ei_extract_data(other.rhs())
+            && "aliasing detected during tranposition, please evaluate your expression");
+  return lazyAssign(static_cast<const MatrixBase<CwiseBinaryOp<ei_scalar_sum_op<Scalar>,DerivedA,Transpose<DerivedB> > >& >(other));
+}
+
+template<typename Derived>
+template<typename OtherDerived> Derived&
+MatrixBase<Derived>::
+lazyAssign(const CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<OtherDerived> > >& other)
+{
+  ei_assert(ei_extract_data(other) != ei_extract_data(derived())
+            && "aliasing detected during tranposition, please use adjointInPlace()");
+  return lazyAssign(static_cast<const MatrixBase<CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<OtherDerived> > > >& >(other));
+}
+
+template<typename Derived>
+template<typename DerivedA, typename DerivedB>
+Derived& MatrixBase<Derived>::
+lazyAssign(const CwiseBinaryOp<ei_scalar_sum_op<Scalar>,CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<DerivedA> > >,DerivedB>& other)
+{
+  ei_assert(ei_extract_data(derived()) != ei_extract_data(other.lhs())
+            && "aliasing detected during tranposition, please evaluate your expression");
+  return lazyAssign(static_cast<const MatrixBase<CwiseBinaryOp<ei_scalar_sum_op<Scalar>,CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<DerivedA> > >,DerivedB> >& >(other));
+}
+
+template<typename Derived>
+template<typename DerivedA, typename DerivedB>
+Derived& MatrixBase<Derived>::
+lazyAssign(const CwiseBinaryOp<ei_scalar_sum_op<Scalar>,DerivedA,CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<DerivedB> > > >& other)
+{
+  ei_assert(ei_extract_data(derived()) != ei_extract_data(other.rhs())
+            && "aliasing detected during tranposition, please evaluate your expression");
+  return lazyAssign(static_cast<const MatrixBase<CwiseBinaryOp<ei_scalar_sum_op<Scalar>,DerivedA,CwiseUnaryOp<ei_scalar_conjugate_op<Scalar>, NestByValue<Eigen::Transpose<DerivedB> > > > >& >(other));
+}
+#endif
+    
 #endif // EIGEN_TRANSPOSE_H

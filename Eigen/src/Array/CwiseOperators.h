@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -39,38 +39,6 @@
 template<typename ExpressionType>
 inline const EIGEN_CWISE_UNOP_RETURN_TYPE(ei_scalar_sqrt_op)
 Cwise<ExpressionType>::sqrt() const
-{
-  return _expression();
-}
-
-/** \array_module
-  * 
-  * \returns an expression of the coefficient-wise exponential of *this.
-  *
-  * Example: \include Cwise_exp.cpp
-  * Output: \verbinclude Cwise_exp.out
-  *
-  * \sa pow(), log(), sin(), cos()
-  */
-template<typename ExpressionType>
-inline const EIGEN_CWISE_UNOP_RETURN_TYPE(ei_scalar_exp_op)
-Cwise<ExpressionType>::exp() const
-{
-  return _expression();
-}
-
-/** \array_module
-  * 
-  * \returns an expression of the coefficient-wise logarithm of *this.
-  *
-  * Example: \include Cwise_log.cpp
-  * Output: \verbinclude Cwise_log.out
-  *
-  * \sa exp()
-  */
-template<typename ExpressionType>
-inline const EIGEN_CWISE_UNOP_RETURN_TYPE(ei_scalar_log_op)
-Cwise<ExpressionType>::log() const
 {
   return _expression();
 }

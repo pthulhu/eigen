@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
@@ -34,39 +34,61 @@ double binom(int n, int k)
   return res;
 }
 
-void test2dRotation()
+template <typename T>
+void test2dRotation(double tol)
 {
-  Matrix2d A, B, C;
-  double angle;
+  Matrix<T,2,2> A, B, C;
+  T angle;
+
+  A << 0, 1, -1, 0;
+  for (int i=0; i<=20; i++) 
+  {
+    angle = static_cast<T>(pow(10, i / 5. - 2));
+    B << cos(angle), sin(angle), -sin(angle), cos(angle);
+    ei_matrix_exponential(angle*A, &C);
+    VERIFY(C.isApprox(B, static_cast<T>(tol)));
+  }
+}
+
+template <typename T>
+void test2dHyperbolicRotation(double tol)
+{
+  Matrix<std::complex<T>,2,2> A, B, C;
+  std::complex<T> imagUnit(0,1);
+  T angle, ch, sh;
 
   for (int i=0; i<=20; i++) 
   {
-    angle = pow(10, i / 5. - 2);
-    A << 0, angle, -angle, 0;
-    B << cos(angle), sin(angle), -sin(angle), cos(angle);
+    angle = static_cast<T>((i-10) / 2.0);
+    ch = std::cosh(angle);
+    sh = std::sinh(angle);
+    A << 0, angle*imagUnit, -angle*imagUnit, 0;
+    B << ch, sh*imagUnit, -sh*imagUnit, ch;
     ei_matrix_exponential(A, &C);
-    VERIFY(C.isApprox(B, 1e-14));
+    VERIFY(C.isApprox(B, static_cast<T>(tol)));
   }
 }
 
-void testPascal()
+template <typename T>
+void testPascal(double tol)
 {
   for (int size=1; size<20; size++)
   {
-    MatrixXd A(size,size), B(size,size), C(size,size);
+    Matrix<T,Dynamic,Dynamic> A(size,size), B(size,size), C(size,size);
     A.setZero();
     for (int i=0; i<size-1; i++)
-      A(i+1,i) = i+1;
+      A(i+1,i) = static_cast<T>(i+1);
     B.setZero();
     for (int i=0; i<size; i++)
       for (int j=0; j<=i; j++)
-	B(i,j) = binom(i,j);
+    B(i,j) = static_cast<T>(binom(i,j));
     ei_matrix_exponential(A, &C);
-    VERIFY(C.isApprox(B, 1e-14));
+    VERIFY(C.isApprox(B, static_cast<T>(tol)));
   }
 }
 
-template<typename MatrixType> void randomTest(const MatrixType& m)
+template<typename MatrixType> 
+void randomTest(const MatrixType& m, double tol)
 {
   /* this test covers the following files:
      Inverse.h
@@ -76,20 +98,30 @@ template<typename MatrixType> void randomTest(const MatrixType& m)
   MatrixType m1(rows, cols), m2(rows, cols), m3(rows, cols),
              identity = MatrixType::Identity(rows, rows);
 
+  typedef typename NumTraits<typename ei_traits<MatrixType>::Scalar>::Real RealScalar;
+
   for(int i = 0; i < g_repeat; i++) {
     m1 = MatrixType::Random(rows, cols);
     ei_matrix_exponential(m1, &m2);
     ei_matrix_exponential(-m1, &m3);
-    VERIFY(identity.isApprox(m2 * m3, 1e-13));
+	VERIFY(identity.isApprox(m2 * m3, static_cast<RealScalar>(tol)));
   }
 }
 
 void test_matrixExponential()
 {
-  CALL_SUBTEST(test2dRotation());
-  CALL_SUBTEST(testPascal());
-  CALL_SUBTEST(randomTest(Matrix2d()));
-  CALL_SUBTEST(randomTest(Matrix3d()));
-  CALL_SUBTEST(randomTest(Matrix4d()));
-  CALL_SUBTEST(randomTest(MatrixXd(8,8)));
+  CALL_SUBTEST(test2dRotation<double>(1e-14));
+  CALL_SUBTEST(test2dRotation<float>(1e-5));
+  CALL_SUBTEST(test2dHyperbolicRotation<double>(1e-14));
+  CALL_SUBTEST(test2dHyperbolicRotation<float>(1e-5));
+  CALL_SUBTEST(testPascal<float>(1e-5));
+  CALL_SUBTEST(testPascal<double>(1e-14));
+  CALL_SUBTEST(randomTest(Matrix2d(), 1e-13));
+  CALL_SUBTEST(randomTest(Matrix<double,3,3,RowMajor>(), 1e-13));
+  CALL_SUBTEST(randomTest(Matrix4cd(), 1e-13));
+  CALL_SUBTEST(randomTest(MatrixXd(8,8), 1e-13));
+  CALL_SUBTEST(randomTest(Matrix2f(), 1e-4));
+  CALL_SUBTEST(randomTest(Matrix3cf(), 1e-4));
+  CALL_SUBTEST(randomTest(Matrix4f(), 1e-4));
+  CALL_SUBTEST(randomTest(MatrixXf(8,8), 1e-4));
 }

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2007-2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -70,7 +70,7 @@ template<typename MatrixType, int Index> class Diagonal
     EIGEN_STRONG_INLINE int absIndex() const { return m_index.value()>0 ? m_index.value() : -m_index.value(); }
     EIGEN_STRONG_INLINE int rowOffset() const { return m_index.value()>0 ? 0 : -m_index.value(); }
     EIGEN_STRONG_INLINE int colOffset() const { return m_index.value()>0 ? m_index.value() : 0; }
-    
+
   public:
 
     EIGEN_GENERIC_PUBLIC_INTERFACE(Diagonal)
@@ -79,7 +79,9 @@ template<typename MatrixType, int Index> class Diagonal
 
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Diagonal)
 
-    inline int rows() const{ return m_matrix.diagonalSize() - absIndex(); }
+    inline int rows() const
+    { return m_index.value()<0 ? std::min(m_matrix.cols(),m_matrix.rows()+m_index.value()) : std::min(m_matrix.rows(),m_matrix.cols()-m_index.value()); }
+
     inline int cols() const { return 1; }
 
     inline Scalar& coeffRef(int row, int)

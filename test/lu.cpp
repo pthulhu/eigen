@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -44,7 +44,7 @@ template<typename MatrixType> void lu_non_invertible()
   VERIFY(cols - lu.rank() == lu.dimensionOfKernel());
   VERIFY(!lu.isInjective());
   VERIFY(!lu.isInvertible());
-  VERIFY(lu.isSurjective() == (lu.rank() == rows));
+  VERIFY(!lu.isSurjective());
   VERIFY((m1 * m1kernel).isMuchSmallerThan(m1));
   VERIFY(m1image.lu().rank() == rank);
   MatrixType sidebyside(m1.rows(), m1.cols() + m1image.cols());
@@ -53,10 +53,15 @@ template<typename MatrixType> void lu_non_invertible()
   m2 = MatrixType::Random(cols,cols2);
   m3 = m1*m2;
   m2 = MatrixType::Random(cols,cols2);
-  lu.solve(m3, &m2);
+  VERIFY(lu.solve(m3, &m2));
   VERIFY_IS_APPROX(m3, m1*m2);
   m3 = MatrixType::Random(rows,cols2);
   VERIFY(!lu.solve(m3, &m2));
+  
+  typedef Matrix<typename MatrixType::Scalar, MatrixType::RowsAtCompileTime, MatrixType::RowsAtCompileTime> SquareMatrixType;
+  SquareMatrixType m4(rows, rows), m5(rows, rows);
+  createRandomMatrixOfRank(rows/2, rows, rows, m4);
+  VERIFY(!m4.computeInverseWithCheck(&m5));
 }
 
 template<typename MatrixType> void lu_invertible()
@@ -92,6 +97,37 @@ template<typename MatrixType> void lu_invertible()
   VERIFY(lu.solve(m3, &m2));
 }
 
+template<typename MatrixType> void lu_verify_assert()
+{
+  MatrixType tmp;
+
+  LU<MatrixType> lu;
+  VERIFY_RAISES_ASSERT(lu.matrixLU())
+  VERIFY_RAISES_ASSERT(lu.permutationP())
+  VERIFY_RAISES_ASSERT(lu.permutationQ())
+  VERIFY_RAISES_ASSERT(lu.computeKernel(&tmp))
+  VERIFY_RAISES_ASSERT(lu.computeImage(&tmp))
+  VERIFY_RAISES_ASSERT(lu.kernel())
+  VERIFY_RAISES_ASSERT(lu.image())
+  VERIFY_RAISES_ASSERT(lu.solve(tmp,&tmp))
+  VERIFY_RAISES_ASSERT(lu.determinant())
+  VERIFY_RAISES_ASSERT(lu.rank())
+  VERIFY_RAISES_ASSERT(lu.dimensionOfKernel())
+  VERIFY_RAISES_ASSERT(lu.isInjective())
+  VERIFY_RAISES_ASSERT(lu.isSurjective())
+  VERIFY_RAISES_ASSERT(lu.isInvertible())
+  VERIFY_RAISES_ASSERT(lu.computeInverse(&tmp))
+  VERIFY_RAISES_ASSERT(lu.inverse())
+
+  PartialLU<MatrixType> plu;
+  VERIFY_RAISES_ASSERT(plu.matrixLU())
+  VERIFY_RAISES_ASSERT(plu.permutationP())
+  VERIFY_RAISES_ASSERT(plu.solve(tmp,&tmp))
+  VERIFY_RAISES_ASSERT(plu.determinant())
+  VERIFY_RAISES_ASSERT(plu.computeInverse(&tmp))
+  VERIFY_RAISES_ASSERT(plu.inverse())
+}
+
 void test_lu()
 {
   for(int i = 0; i < g_repeat; i++) {
@@ -104,4 +140,11 @@ void test_lu()
     CALL_SUBTEST( lu_invertible<MatrixXcf>() );
     CALL_SUBTEST( lu_invertible<MatrixXcd>() );
   }
+
+  CALL_SUBTEST( lu_verify_assert<Matrix3f>() );
+  CALL_SUBTEST( lu_verify_assert<Matrix3d>() );
+  CALL_SUBTEST( lu_verify_assert<MatrixXf>() );
+  CALL_SUBTEST( lu_verify_assert<MatrixXd>() );
+  CALL_SUBTEST( lu_verify_assert<MatrixXcf>() );
+  CALL_SUBTEST( lu_verify_assert<MatrixXcd>() );
 }

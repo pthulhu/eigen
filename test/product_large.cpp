@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -41,5 +41,11 @@ void test_product_large()
     MatrixXf m = MatrixXf::Ones(N,3);
     m = (v+v).asDiagonal() * m;
     VERIFY_IS_APPROX(m, MatrixXf::Constant(N,3,2));
+  }
+
+  {
+    // test deferred resizing in Matrix::operator=
+    MatrixXf a = MatrixXf::Random(10,4), b = MatrixXf::Random(4,10), c = a;
+    VERIFY_IS_APPROX((a = a * b), (c * b).eval());
   }
 }

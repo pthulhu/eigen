@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -30,7 +30,7 @@
 /** \internal
   * \brief Template functor to compute the sum of two scalars
   *
-  * \sa class CwiseBinaryOp, MatrixBase::operator+, class PartialRedux, MatrixBase::sum()
+  * \sa class CwiseBinaryOp, MatrixBase::operator+, class VectorwiseOp, MatrixBase::sum()
   */
 template<typename Scalar> struct ei_scalar_sum_op EIGEN_EMPTY_STRUCT {
   EIGEN_STRONG_INLINE const Scalar operator() (const Scalar& a, const Scalar& b) const { return a + b; }
@@ -52,7 +52,7 @@ struct ei_functor_traits<ei_scalar_sum_op<Scalar> > {
 /** \internal
   * \brief Template functor to compute the product of two scalars
   *
-  * \sa class CwiseBinaryOp, Cwise::operator*(), class PartialRedux, MatrixBase::redux()
+  * \sa class CwiseBinaryOp, Cwise::operator*(), class VectorwiseOp, MatrixBase::redux()
   */
 template<typename Scalar> struct ei_scalar_product_op EIGEN_EMPTY_STRUCT {
   EIGEN_STRONG_INLINE const Scalar operator() (const Scalar& a, const Scalar& b) const { return a * b; }
@@ -74,7 +74,7 @@ struct ei_functor_traits<ei_scalar_product_op<Scalar> > {
 /** \internal
   * \brief Template functor to compute the min of two scalars
   *
-  * \sa class CwiseBinaryOp, MatrixBase::cwiseMin, class PartialRedux, MatrixBase::minCoeff()
+  * \sa class CwiseBinaryOp, MatrixBase::cwiseMin, class VectorwiseOp, MatrixBase::minCoeff()
   */
 template<typename Scalar> struct ei_scalar_min_op EIGEN_EMPTY_STRUCT {
   EIGEN_STRONG_INLINE const Scalar operator() (const Scalar& a, const Scalar& b) const { return std::min(a, b); }
@@ -96,7 +96,7 @@ struct ei_functor_traits<ei_scalar_min_op<Scalar> > {
 /** \internal
   * \brief Template functor to compute the max of two scalars
   *
-  * \sa class CwiseBinaryOp, MatrixBase::cwiseMax, class PartialRedux, MatrixBase::maxCoeff()
+  * \sa class CwiseBinaryOp, MatrixBase::cwiseMax, class VectorwiseOp, MatrixBase::maxCoeff()
   */
 template<typename Scalar> struct ei_scalar_max_op EIGEN_EMPTY_STRUCT {
   EIGEN_STRONG_INLINE const Scalar operator() (const Scalar& a, const Scalar& b) const { return std::max(a, b); }
@@ -124,9 +124,6 @@ template<typename Scalar> struct ei_scalar_hypot_op EIGEN_EMPTY_STRUCT {
 //   typedef typename NumTraits<Scalar>::Real result_type;
   EIGEN_STRONG_INLINE const Scalar operator() (const Scalar& _x, const Scalar& _y) const
   {
-//     typedef typename NumTraits<T>::Real RealScalar;
-//     RealScalar _x = ei_abs(x);
-//     RealScalar _y = ei_abs(y);
     Scalar p = std::max(_x, _y);
     Scalar q = std::min(_x, _y);
     Scalar qp = q/p;
@@ -280,6 +277,7 @@ template<typename Scalar>
 struct ei_scalar_real_op EIGEN_EMPTY_STRUCT {
   typedef typename NumTraits<Scalar>::Real result_type;
   EIGEN_STRONG_INLINE result_type operator() (const Scalar& a) const { return ei_real(a); }
+  EIGEN_STRONG_INLINE result_type& operator() (Scalar& a) const { return ei_real_ref(a); }
 };
 template<typename Scalar>
 struct ei_functor_traits<ei_scalar_real_op<Scalar> >
@@ -294,10 +292,41 @@ template<typename Scalar>
 struct ei_scalar_imag_op EIGEN_EMPTY_STRUCT {
   typedef typename NumTraits<Scalar>::Real result_type;
   EIGEN_STRONG_INLINE result_type operator() (const Scalar& a) const { return ei_imag(a); }
+  EIGEN_STRONG_INLINE result_type& operator() (Scalar& a) const { return ei_imag_ref(a); }
 };
 template<typename Scalar>
 struct ei_functor_traits<ei_scalar_imag_op<Scalar> >
 { enum { Cost = 0, PacketAccess = false }; };
+
+/** \internal
+  *
+  * \brief Template functor to compute the exponential of a scalar
+  *
+  * \sa class CwiseUnaryOp, Cwise::exp()
+  */
+template<typename Scalar> struct ei_scalar_exp_op EIGEN_EMPTY_STRUCT {
+  inline const Scalar operator() (const Scalar& a) const { return ei_exp(a); }
+  typedef typename ei_packet_traits<Scalar>::type Packet;
+  inline Packet packetOp(const Packet& a) const { return ei_pexp(a); }
+};
+template<typename Scalar>
+struct ei_functor_traits<ei_scalar_exp_op<Scalar> >
+{ enum { Cost = 5 * NumTraits<Scalar>::MulCost, PacketAccess = ei_packet_traits<Scalar>::HasExp }; };
+
+/** \internal
+  *
+  * \brief Template functor to compute the logarithm of a scalar
+  *
+  * \sa class CwiseUnaryOp, Cwise::log()
+  */
+template<typename Scalar> struct ei_scalar_log_op EIGEN_EMPTY_STRUCT {
+  inline const Scalar operator() (const Scalar& a) const { return ei_log(a); }
+  typedef typename ei_packet_traits<Scalar>::type Packet;
+  inline Packet packetOp(const Packet& a) const { return ei_plog(a); }
+};
+template<typename Scalar>
+struct ei_functor_traits<ei_scalar_log_op<Scalar> >
+{ enum { Cost = 5 * NumTraits<Scalar>::MulCost, PacketAccess = ei_packet_traits<Scalar>::HasLog }; };
 
 /** \internal
   * \brief Template functor to multiply a scalar by a fixed other one
@@ -322,6 +351,8 @@ struct ei_scalar_multiple_op {
   EIGEN_STRONG_INLINE const PacketScalar packetOp(const PacketScalar& a) const
   { return ei_pmul(a, ei_pset1(m_other)); }
   const Scalar m_other;
+private:
+  ei_scalar_multiple_op& operator=(const ei_scalar_multiple_op&);
 };
 template<typename Scalar>
 struct ei_functor_traits<ei_scalar_multiple_op<Scalar> >
@@ -349,6 +380,8 @@ struct ei_scalar_quotient1_impl {
   EIGEN_STRONG_INLINE const PacketScalar packetOp(const PacketScalar& a) const
   { return ei_pmul(a, ei_pset1(m_other)); }
   const Scalar m_other;
+private:
+  ei_scalar_quotient1_impl& operator=(const ei_scalar_quotient1_impl&);
 };
 template<typename Scalar>
 struct ei_functor_traits<ei_scalar_quotient1_impl<Scalar,true> >
@@ -380,7 +413,7 @@ struct ei_scalar_quotient1_op : ei_scalar_quotient1_impl<Scalar, NumTraits<Scala
     : ei_scalar_quotient1_impl<Scalar, NumTraits<Scalar>::HasFloatingPoint >(other) {}
 };
 template<typename Scalar>
-struct ei_functor_traits<ei_scalar_quotient1_op<Scalar> > 
+struct ei_functor_traits<ei_scalar_quotient1_op<Scalar> >
 : ei_functor_traits<ei_scalar_quotient1_impl<Scalar, NumTraits<Scalar>::HasFloatingPoint> >
 {};
 
@@ -394,6 +427,8 @@ struct ei_scalar_constant_op {
   EIGEN_STRONG_INLINE const Scalar operator() (int, int = 0) const { return m_other; }
   EIGEN_STRONG_INLINE const PacketScalar packetOp() const { return ei_pset1(m_other); }
   const Scalar m_other;
+private:
+  ei_scalar_constant_op& operator=(const ei_scalar_constant_op&);
 };
 template<typename Scalar>
 struct ei_functor_traits<ei_scalar_constant_op<Scalar> >

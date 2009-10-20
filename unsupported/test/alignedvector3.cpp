@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2009 Gael Guennebaud <g.gael@free.fr>
 //
@@ -40,7 +40,7 @@ void alignedvector3()
   
   VERIFY_IS_APPROX(f1,r1);
   VERIFY_IS_APPROX(f4,r4);
-  
+
   VERIFY_IS_APPROX(f4+f1,r4+r1);
   VERIFY_IS_APPROX(f4-f1,r4-r1);
   VERIFY_IS_APPROX(f4+f1-f2,r4+r1-r2);
@@ -56,6 +56,10 @@ void alignedvector3()
   VERIFY_IS_APPROX(f2.dot(f3),r2.dot(r3));
   VERIFY_IS_APPROX(f2.cross(f3),r2.cross(r3));
   VERIFY_IS_APPROX(f2.norm(),r2.norm());
+
+  VERIFY_IS_APPROX(f2.normalized(),r2.normalized());
+
+  VERIFY_IS_APPROX((f2+f1).normalized(),(r2+r1).normalized());
   
   f2.normalize();
   r2.normalize();

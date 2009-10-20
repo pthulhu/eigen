@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -85,6 +85,8 @@ class CwiseBinaryOp : ei_no_assignment_operator,
     EIGEN_GENERIC_PUBLIC_INTERFACE(CwiseBinaryOp)
     typedef typename ei_traits<CwiseBinaryOp>::LhsNested LhsNested;
     typedef typename ei_traits<CwiseBinaryOp>::RhsNested RhsNested;
+    typedef typename ei_traits<CwiseBinaryOp>::_LhsNested _LhsNested;
+    typedef typename ei_traits<CwiseBinaryOp>::_RhsNested _RhsNested;
 
     EIGEN_STRONG_INLINE CwiseBinaryOp(const Lhs& lhs, const Rhs& rhs, const BinaryOp& func = BinaryOp())
       : m_lhs(lhs), m_rhs(rhs), m_functor(func)
@@ -129,6 +131,10 @@ class CwiseBinaryOp : ei_no_assignment_operator,
     {
       return m_functor.packetOp(m_lhs.template packet<LoadMode>(index), m_rhs.template packet<LoadMode>(index));
     }
+
+    const _LhsNested& lhs() const { return m_lhs; }
+    const _RhsNested& rhs() const { return m_rhs; }
+    const BinaryOp& functor() const { return m_functor; }
 
   protected:
     const LhsNested m_lhs;
@@ -284,8 +290,6 @@ Cwise<ExpressionType>::max(const MatrixBase<OtherDerived> &other) const
   *
   * The template parameter \a CustomBinaryOp is the type of the functor
   * of the custom operator (see class CwiseBinaryOp for an example)
-  *
-  * \addexample CustomCwiseBinaryFunctors \label How to use custom coeff wise binary functors
   *
   * Here is an example illustrating the use of custom functors:
   * \include class_CwiseBinaryOp.cpp

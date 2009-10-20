@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -86,7 +86,8 @@ template<typename MatrixType> void submatrices(const MatrixType& m)
 
   //check row() and col()
   VERIFY_IS_APPROX(m1.col(c1).transpose(), m1.transpose().row(c1));
-  VERIFY_IS_APPROX(square.row(r1).dot(m1.col(c1)), (square.lazy() * m1.conjugate())(r1,c1));
+  // FIXME perhaps we should re-enable that without the .eval()
+  VERIFY_IS_APPROX(m1.col(c1).dot(square.row(r1)), (square * m1.conjugate()).eval()(r1,c1));
   //check operator(), both constant and non-constant, on row() and col()
   m1.row(r1) += s1 * m1.row(r2);
   m1.col(c1) += s1 * m1.col(c2);
@@ -169,6 +170,48 @@ template<typename MatrixType> void submatrices(const MatrixType& m)
   VERIFY(ei_real(ones.row(r1).dot(ones.row(r2))) == RealScalar(cols));
 }
 
+
+template<typename MatrixType>
+void compare_using_data_and_stride(const MatrixType& m)
+{
+  int rows = m.rows();
+  int cols = m.cols();
+  int size = m.size();
+  int stride = m.stride();
+  const typename MatrixType::Scalar* data = m.data();
+
+  for(int j=0;j<cols;++j)
+    for(int i=0;i<rows;++i)
+      VERIFY_IS_APPROX(m.coeff(i,j), data[(MatrixType::Flags&RowMajorBit) ? i*stride+j : j*stride + i]);
+
+  if(MatrixType::IsVectorAtCompileTime)
+  {
+    VERIFY_IS_APPROX(stride, int((&m.coeff(1))-(&m.coeff(0))));
+    for (int i=0;i<size;++i)
+      VERIFY_IS_APPROX(m.coeff(i), data[i*stride]);
+  }
+}
+
+template<typename MatrixType>
+void data_and_stride(const MatrixType& m)
+{
+  int rows = m.rows();
+  int cols = m.cols();
+
+  int r1 = ei_random<int>(0,rows-1);
+  int r2 = ei_random<int>(r1,rows-1);
+  int c1 = ei_random<int>(0,cols-1);
+  int c2 = ei_random<int>(c1,cols-1);
+
+  MatrixType m1 = MatrixType::Random(rows, cols);
+  compare_using_data_and_stride(m1.block(r1, c1, r2-r1+1, c2-c1+1));
+  compare_using_data_and_stride(m1.transpose().block(c1, r1, c2-c1+1, r2-r1+1));
+  compare_using_data_and_stride(m1.row(r1));
+  compare_using_data_and_stride(m1.col(c1));
+  compare_using_data_and_stride(m1.row(r1).transpose());
+  compare_using_data_and_stride(m1.col(c1).transpose());
+}
+
 void test_submatrices()
 {
   for(int i = 0; i < g_repeat; i++) {
@@ -178,5 +221,8 @@ void test_submatrices()
     CALL_SUBTEST( submatrices(MatrixXi(8, 12)) );
     CALL_SUBTEST( submatrices(MatrixXcd(20, 20)) );
     CALL_SUBTEST( submatrices(MatrixXf(20, 20)) );
+
+    CALL_SUBTEST( data_and_stride(MatrixXf(ei_random(5,50), ei_random(5,50))) );
+    CALL_SUBTEST( data_and_stride(Matrix<int,Dynamic,Dynamic,RowMajor>(ei_random(5,50), ei_random(5,50))) );
   }
 }

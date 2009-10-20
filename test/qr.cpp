@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -27,73 +27,52 @@
 
 template<typename MatrixType> void qr(const MatrixType& m)
 {
-  /* this test covers the following files: QR.h */
   int rows = m.rows();
   int cols = m.cols();
 
   typedef typename MatrixType::Scalar Scalar;
-  typedef Matrix<Scalar, MatrixType::ColsAtCompileTime, MatrixType::ColsAtCompileTime> SquareMatrixType;
+  typedef Matrix<Scalar, MatrixType::RowsAtCompileTime, MatrixType::RowsAtCompileTime> MatrixQType;
   typedef Matrix<Scalar, MatrixType::ColsAtCompileTime, 1> VectorType;
 
   MatrixType a = MatrixType::Random(rows,cols);
-  QR<MatrixType> qrOfA(a);
-  VERIFY_IS_APPROX(a, qrOfA.matrixQ() * qrOfA.matrixR());
-  VERIFY_IS_NOT_APPROX(a+MatrixType::Identity(rows, cols), qrOfA.matrixQ() * qrOfA.matrixR());
+  HouseholderQR<MatrixType> qrOfA(a);
+  MatrixType r = qrOfA.matrixQR();
+  
+  MatrixQType q = qrOfA.matrixQ();
+  VERIFY_IS_UNITARY(q);
+  
+  // FIXME need better way to construct trapezoid
+  for(int i = 0; i < rows; i++) for(int j = 0; j < cols; j++) if(i>j) r(i,j) = Scalar(0);
 
-  SquareMatrixType b = a.adjoint() * a;
-
-  // check tridiagonalization
-  Tridiagonalization<SquareMatrixType> tridiag(b);
-  VERIFY_IS_APPROX(b, tridiag.matrixQ() * tridiag.matrixT() * tridiag.matrixQ().adjoint());
-
-  // check hessenberg decomposition
-  HessenbergDecomposition<SquareMatrixType> hess(b);
-  VERIFY_IS_APPROX(b, hess.matrixQ() * hess.matrixH() * hess.matrixQ().adjoint());
-  VERIFY_IS_APPROX(tridiag.matrixT(), hess.matrixH());
-  b = SquareMatrixType::Random(cols,cols);
-  hess.compute(b);
-  VERIFY_IS_APPROX(b, hess.matrixQ() * hess.matrixH() * hess.matrixQ().adjoint());
+  VERIFY_IS_APPROX(a, qrOfA.matrixQ() * r);
 }
 
-template<typename MatrixType> void qr_non_invertible()
+template<typename MatrixType, int Cols2> void qr_fixedsize()
 {
-  /* this test covers the following files: QR.h */
-  int rows = ei_random<int>(20,200), cols = ei_random<int>(20,rows), cols2 = ei_random<int>(20,rows);
-  int rank = ei_random<int>(1, std::min(rows, cols)-1);
+  enum { Rows = MatrixType::RowsAtCompileTime, Cols = MatrixType::ColsAtCompileTime };
+  typedef typename MatrixType::Scalar Scalar;
+  Matrix<Scalar,Rows,Cols> m1 = Matrix<Scalar,Rows,Cols>::Random();
+  HouseholderQR<Matrix<Scalar,Rows,Cols> > qr(m1);
 
-  MatrixType m1(rows, cols), m2(cols, cols2), m3(rows, cols2), k(1,1);
-  createRandomMatrixOfRank(rank, rows, cols, m1);
+  Matrix<Scalar,Rows,Cols> r = qr.matrixQR();
+  // FIXME need better way to construct trapezoid
+  for(int i = 0; i < Rows; i++) for(int j = 0; j < Cols; j++) if(i>j) r(i,j) = Scalar(0);
 
-  QR<MatrixType> lu(m1);
-//   typename LU<MatrixType>::KernelResultType m1kernel = lu.kernel();
-//   typename LU<MatrixType>::ImageResultType m1image = lu.image();
-  std::cerr << rows << "x" << cols << "   " << rank << " " << lu.rank() << "\n";
-  if (rank != lu.rank())
-    std::cerr << lu.matrixR().diagonal().transpose() << "\n";
-  VERIFY(rank == lu.rank());
-  VERIFY(cols - lu.rank() == lu.dimensionOfKernel());
-  VERIFY(!lu.isInjective());
-  VERIFY(!lu.isInvertible());
-  VERIFY(lu.isSurjective() == (lu.rank() == rows));
-//   VERIFY((m1 * m1kernel).isMuchSmallerThan(m1));
-//   VERIFY(m1image.lu().rank() == rank);
-//   MatrixType sidebyside(m1.rows(), m1.cols() + m1image.cols());
-//   sidebyside << m1, m1image;
-//   VERIFY(sidebyside.lu().rank() == rank);
-  m2 = MatrixType::Random(cols,cols2);
-  m3 = m1*m2;
-  m2 = MatrixType::Random(cols,cols2);
-  lu.solve(m3, &m2);
+  VERIFY_IS_APPROX(m1, qr.matrixQ() * r);
+
+  Matrix<Scalar,Cols,Cols2> m2 = Matrix<Scalar,Cols,Cols2>::Random(Cols,Cols2);
+  Matrix<Scalar,Rows,Cols2> m3 = m1*m2;
+  m2 = Matrix<Scalar,Cols,Cols2>::Random(Cols,Cols2);
+  qr.solve(m3, &m2);
   VERIFY_IS_APPROX(m3, m1*m2);
-  m3 = MatrixType::Random(rows,cols2);
-  VERIFY(!lu.solve(m3, &m2));
 }
 
 template<typename MatrixType> void qr_invertible()
 {
-  /* this test covers the following files: QR.h */
   typedef typename NumTraits<typename MatrixType::Scalar>::Real RealScalar;
-  int size = ei_random<int>(10,200);
+  typedef typename MatrixType::Scalar Scalar;
+
+  int size = ei_random<int>(10,50);
 
   MatrixType m1(size, size), m2(size, size), m3(size, size);
   m1 = MatrixType::Random(size,size);
@@ -105,43 +84,55 @@ template<typename MatrixType> void qr_invertible()
     m1 += a * a.adjoint();
   }
 
-  QR<MatrixType> lu(m1);
-  VERIFY(0 == lu.dimensionOfKernel());
-  VERIFY(size == lu.rank());
-  VERIFY(lu.isInjective());
-  VERIFY(lu.isSurjective());
-  VERIFY(lu.isInvertible());
-//   VERIFY(lu.image().lu().isInvertible());
+  HouseholderQR<MatrixType> qr(m1);
   m3 = MatrixType::Random(size,size);
-  lu.solve(m3, &m2);
-  //std::cerr << m3 - m1*m2 << "\n\n";
+  qr.solve(m3, &m2);
   VERIFY_IS_APPROX(m3, m1*m2);
-//   VERIFY_IS_APPROX(m2, lu.inverse()*m3);
-  m3 = MatrixType::Random(size,size);
-  VERIFY(lu.solve(m3, &m2));
+
+  // now construct a matrix with prescribed determinant
+  m1.setZero();
+  for(int i = 0; i < size; i++) m1(i,i) = ei_random<Scalar>();
+  RealScalar absdet = ei_abs(m1.diagonal().prod());
+  m3 = qr.matrixQ(); // get a unitary
+  m1 = m3 * m1 * m3;
+  qr.compute(m1);
+  VERIFY_IS_APPROX(absdet, qr.absDeterminant());
+  VERIFY_IS_APPROX(ei_log(absdet), qr.logAbsDeterminant());
+}
+
+template<typename MatrixType> void qr_verify_assert()
+{
+  MatrixType tmp;
+
+  HouseholderQR<MatrixType> qr;
+  VERIFY_RAISES_ASSERT(qr.matrixQR())
+  VERIFY_RAISES_ASSERT(qr.solve(tmp,&tmp))
+  VERIFY_RAISES_ASSERT(qr.matrixQ())
+  VERIFY_RAISES_ASSERT(qr.absDeterminant())
+  VERIFY_RAISES_ASSERT(qr.logAbsDeterminant())
 }
 
 void test_qr()
 {
   for(int i = 0; i < 1; i++) {
-//     CALL_SUBTEST( qr(Matrix2f()) );
-//     CALL_SUBTEST( qr(Matrix4d()) );
-//     CALL_SUBTEST( qr(MatrixXf(12,8)) );
-//     CALL_SUBTEST( qr(MatrixXcd(5,5)) );
-//     CALL_SUBTEST( qr(MatrixXcd(7,3)) );
-    CALL_SUBTEST( qr(MatrixXf(47,47)) );
+   CALL_SUBTEST( qr(MatrixXf(47,40)) );
+   CALL_SUBTEST( qr(MatrixXcd(17,7)) );
+   CALL_SUBTEST(( qr_fixedsize<Matrix<float,3,4>, 2 >() ));
+   CALL_SUBTEST(( qr_fixedsize<Matrix<double,6,2>, 4 >() ));
+   CALL_SUBTEST(( qr_fixedsize<Matrix<double,2,5>, 7 >() ));
   }
 
   for(int i = 0; i < g_repeat; i++) {
-    CALL_SUBTEST( qr_non_invertible<MatrixXf>() );
-    CALL_SUBTEST( qr_non_invertible<MatrixXd>() );
-    // TODO fix issue with complex
-//     CALL_SUBTEST( qr_non_invertible<MatrixXcf>() );
-//     CALL_SUBTEST( qr_non_invertible<MatrixXcd>() );
     CALL_SUBTEST( qr_invertible<MatrixXf>() );
     CALL_SUBTEST( qr_invertible<MatrixXd>() );
-    // TODO fix issue with complex
-//     CALL_SUBTEST( qr_invertible<MatrixXcf>() );
-//     CALL_SUBTEST( qr_invertible<MatrixXcd>() );
+    CALL_SUBTEST( qr_invertible<MatrixXcf>() );
+    CALL_SUBTEST( qr_invertible<MatrixXcd>() );
   }
+
+  CALL_SUBTEST(qr_verify_assert<Matrix3f>());
+  CALL_SUBTEST(qr_verify_assert<Matrix3d>());
+  CALL_SUBTEST(qr_verify_assert<MatrixXf>());
+  CALL_SUBTEST(qr_verify_assert<MatrixXd>());
+  CALL_SUBTEST(qr_verify_assert<MatrixXcf>());
+  CALL_SUBTEST(qr_verify_assert<MatrixXcd>());
 }

@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
@@ -108,7 +108,7 @@ void ei_pseudo_inverse(const CMatrix &C, CINVMatrix &CINV)
 /** \ingroup IterativeSolvers_Module
   * Constrained conjugate gradient
   *
-  * Computes the minimum of \f$ 1/2((Ax).x) - bx \f$ under the contraint \f$ Cx <= f @\$
+  * Computes the minimum of \f$ 1/2((Ax).x) - bx \f$ under the contraint \f$ Cx \le f \f$
   */
 template<typename TMatrix, typename CMatrix,
          typename VectorX, typename VectorB, typename VectorF>

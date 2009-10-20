@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
@@ -33,8 +33,8 @@
   * \param MatrixType the type of the object in which we are taking a block
   * \param BlockRows the number of rows of the block we are taking at compile time (optional)
   * \param BlockCols the number of columns of the block we are taking at compile time (optional)
-  * \param _PacketAccess allows to enforce aligned loads and stores if set to ForceAligned.
-  *                      The default is AsRequested. This parameter is internaly used by Eigen
+  * \param _PacketAccess allows to enforce aligned loads and stores if set to \b ForceAligned.
+  *                      The default is \b AsRequested. This parameter is internaly used by Eigen
   *                      in expressions such as \code mat.block() += other; \endcode and most of
   *                      the time this is the only way it is used.
   * \param _DirectAccessStatus \internal used for partial specialization
@@ -124,7 +124,7 @@ template<typename MatrixType, int BlockRows, int BlockCols, int PacketAccess, in
     {
       EIGEN_STATIC_ASSERT(RowsAtCompileTime!=Dynamic && ColsAtCompileTime!=Dynamic,THIS_METHOD_IS_ONLY_FOR_FIXED_SIZE)
       ei_assert(startRow >= 0 && BlockRows >= 1 && startRow + BlockRows <= matrix.rows()
-          && startCol >= 0 && BlockCols >= 1 && startCol + BlockCols <= matrix.cols());
+             && startCol >= 0 && BlockCols >= 1 && startCol + BlockCols <= matrix.cols());
     }
 
     /** Dynamic-size constructor
@@ -137,8 +137,8 @@ template<typename MatrixType, int BlockRows, int BlockCols, int PacketAccess, in
     {
       ei_assert((RowsAtCompileTime==Dynamic || RowsAtCompileTime==blockRows)
           && (ColsAtCompileTime==Dynamic || ColsAtCompileTime==blockCols));
-      ei_assert(startRow >= 0 && blockRows >= 1 && startRow + blockRows <= matrix.rows()
-          && startCol >= 0 && blockCols >= 1 && startCol + blockCols <= matrix.cols());
+      ei_assert(startRow >= 0 && blockRows >= 0 && startRow + blockRows <= matrix.rows()
+          && startCol >= 0 && blockCols >= 0 && startCol + blockCols <= matrix.cols());
     }
 
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Block)
@@ -200,6 +200,13 @@ template<typename MatrixType, int BlockRows, int BlockCols, int PacketAccess, in
          (m_startRow.value() + (RowsAtCompileTime == 1 ? 0 : index),
           m_startCol.value() + (RowsAtCompileTime == 1 ? index : 0), x);
     }
+
+    #ifdef EIGEN_PARSED_BY_DOXYGEN
+    /** \sa MapBase::data() */
+    inline const Scalar* data() const;
+    /** \sa MapBase::stride() */
+    inline int stride() const;
+    #endif
 
   protected:
 
@@ -265,19 +272,32 @@ class Block<MatrixType,BlockRows,BlockCols,PacketAccess,HasDirectAccess>
     {
       ei_assert((RowsAtCompileTime==Dynamic || RowsAtCompileTime==blockRows)
              && (ColsAtCompileTime==Dynamic || ColsAtCompileTime==blockCols));
-      ei_assert(startRow >= 0 && blockRows >= 1 && startRow + blockRows <= matrix.rows()
-             && startCol >= 0 && blockCols >= 1 && startCol + blockCols <= matrix.cols());
+      ei_assert(startRow >= 0 && blockRows >= 0 && startRow + blockRows <= matrix.rows()
+             && startCol >= 0 && blockCols >= 0 && startCol + blockCols <= matrix.cols());
     }
 
-    inline int stride(void) const { return m_matrix.stride(); }
+    /** \sa MapBase::stride() */
+    inline int stride() const
+    {
+      return    ((!Base::IsVectorAtCompileTime)
+              || (BlockRows==1 && ((Flags&RowMajorBit)==0))
+              || (BlockCols==1 && ((Flags&RowMajorBit)==RowMajorBit)))
+              ? m_matrix.stride() : 1;
+    }
 
+  #ifndef __SUNPRO_CC
+  // FIXME sunstudio is not friendly with the above friend...
   protected:
+  #endif
 
+    #ifndef EIGEN_PARSED_BY_DOXYGEN
     /** \internal used by allowAligned() */
     inline Block(const MatrixType& matrix, const Scalar* data, int blockRows, int blockCols)
       : Base(data, blockRows, blockCols), m_matrix(matrix)
     {}
+    #endif
 
+  protected:
     const typename MatrixType::Nested m_matrix;
 };
 
@@ -287,8 +307,6 @@ class Block<MatrixType,BlockRows,BlockCols,PacketAccess,HasDirectAccess>
   * \param startCol the first column in the block
   * \param blockRows the number of rows in the block
   * \param blockCols the number of columns in the block
-  *
-  * \addexample BlockIntIntIntInt \label How to reference a sub-matrix (dynamic-size)
   *
   * Example: \include MatrixBase_block_int_int_int_int.cpp
   * Output: \verbinclude MatrixBase_block_int_int_int_int.out
@@ -314,257 +332,12 @@ inline const typename BlockReturnType<Derived>::Type MatrixBase<Derived>
   return typename BlockReturnType<Derived>::Type(derived(), startRow, startCol, blockRows, blockCols);
 }
 
-/** \returns a dynamic-size expression of a segment (i.e. a vector block) in *this.
-  *
-  * \only_for_vectors
-  *
-  * \addexample SegmentIntInt \label How to reference a sub-vector (dynamic size)
-  *
-  * \param start the first coefficient in the segment
-  * \param size the number of coefficients in the segment
-  *
-  * Example: \include MatrixBase_segment_int_int.cpp
-  * Output: \verbinclude MatrixBase_segment_int_int.out
-  *
-  * \note Even though the returned expression has dynamic size, in the case
-  * when it is applied to a fixed-size vector, it inherits a fixed maximal size,
-  * which means that evaluating it does not cause a dynamic memory allocation.
-  *
-  * \sa class Block, segment(int)
-  */
-template<typename Derived>
-inline typename BlockReturnType<Derived>::SubVectorType MatrixBase<Derived>
-  ::segment(int start, int size)
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return typename BlockReturnType<Derived>::SubVectorType(derived(), RowsAtCompileTime == 1 ? 0 : start,
-                                   ColsAtCompileTime == 1 ? 0 : start,
-                                   RowsAtCompileTime == 1 ? 1 : size,
-                                   ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** This is the const version of segment(int,int).*/
-template<typename Derived>
-inline const typename BlockReturnType<Derived>::SubVectorType
-MatrixBase<Derived>::segment(int start, int size) const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return typename BlockReturnType<Derived>::SubVectorType(derived(), RowsAtCompileTime == 1 ? 0 : start,
-                                   ColsAtCompileTime == 1 ? 0 : start,
-                                   RowsAtCompileTime == 1 ? 1 : size,
-                                   ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** \returns a dynamic-size expression of the first coefficients of *this.
-  *
-  * \only_for_vectors
-  *
-  * \param size the number of coefficients in the block
-  *
-  * \addexample BlockInt \label How to reference a sub-vector (fixed-size)
-  *
-  * Example: \include MatrixBase_start_int.cpp
-  * Output: \verbinclude MatrixBase_start_int.out
-  *
-  * \note Even though the returned expression has dynamic size, in the case
-  * when it is applied to a fixed-size vector, it inherits a fixed maximal size,
-  * which means that evaluating it does not cause a dynamic memory allocation.
-  *
-  * \sa class Block, block(int,int)
-  */
-template<typename Derived>
-inline typename BlockReturnType<Derived,Dynamic>::SubVectorType
-MatrixBase<Derived>::start(int size)
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,
-               RowsAtCompileTime == 1 ? 1 : Dynamic,
-               ColsAtCompileTime == 1 ? 1 : Dynamic>
-              (derived(), 0, 0,
-               RowsAtCompileTime == 1 ? 1 : size,
-               ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** This is the const version of start(int).*/
-template<typename Derived>
-inline const typename BlockReturnType<Derived,Dynamic>::SubVectorType
-MatrixBase<Derived>::start(int size) const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,
-               RowsAtCompileTime == 1 ? 1 : Dynamic,
-               ColsAtCompileTime == 1 ? 1 : Dynamic>
-              (derived(), 0, 0,
-               RowsAtCompileTime == 1 ? 1 : size,
-               ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** \returns a dynamic-size expression of the last coefficients of *this.
-  *
-  * \only_for_vectors
-  *
-  * \param size the number of coefficients in the block
-  *
-  * \addexample BlockEnd \label How to reference the end of a vector (fixed-size)
-  *
-  * Example: \include MatrixBase_end_int.cpp
-  * Output: \verbinclude MatrixBase_end_int.out
-  *
-  * \note Even though the returned expression has dynamic size, in the case
-  * when it is applied to a fixed-size vector, it inherits a fixed maximal size,
-  * which means that evaluating it does not cause a dynamic memory allocation.
-  *
-  * \sa class Block, block(int,int)
-  */
-template<typename Derived>
-inline typename BlockReturnType<Derived,Dynamic>::SubVectorType
-MatrixBase<Derived>::end(int size)
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,
-               RowsAtCompileTime == 1 ? 1 : Dynamic,
-               ColsAtCompileTime == 1 ? 1 : Dynamic>
-              (derived(),
-               RowsAtCompileTime == 1 ? 0 : rows() - size,
-               ColsAtCompileTime == 1 ? 0 : cols() - size,
-               RowsAtCompileTime == 1 ? 1 : size,
-               ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** This is the const version of end(int).*/
-template<typename Derived>
-inline const typename BlockReturnType<Derived,Dynamic>::SubVectorType
-MatrixBase<Derived>::end(int size) const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,
-               RowsAtCompileTime == 1 ? 1 : Dynamic,
-               ColsAtCompileTime == 1 ? 1 : Dynamic>
-              (derived(),
-               RowsAtCompileTime == 1 ? 0 : rows() - size,
-               ColsAtCompileTime == 1 ? 0 : cols() - size,
-               RowsAtCompileTime == 1 ? 1 : size,
-               ColsAtCompileTime == 1 ? 1 : size);
-}
-
-/** \returns a fixed-size expression of a segment (i.e. a vector block) in \c *this
-  *
-  * \only_for_vectors
-  *
-  * The template parameter \a Size is the number of coefficients in the block
-  *
-  * \param start the index of the first element of the sub-vector
-  *
-  * Example: \include MatrixBase_template_int_segment.cpp
-  * Output: \verbinclude MatrixBase_template_int_segment.out
-  *
-  * \sa class Block
-  */
-template<typename Derived>
-template<int Size>
-inline typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::segment(int start)
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,  (RowsAtCompileTime == 1 ? 1 : Size),
-                         (ColsAtCompileTime == 1 ? 1 : Size)>
-              (derived(), RowsAtCompileTime == 1 ? 0 : start,
-                          ColsAtCompileTime == 1 ? 0 : start);
-}
-
-/** This is the const version of segment<int>(int).*/
-template<typename Derived>
-template<int Size>
-inline const typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::segment(int start) const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived,  (RowsAtCompileTime == 1 ? 1 : Size),
-                         (ColsAtCompileTime == 1 ? 1 : Size)>
-              (derived(), RowsAtCompileTime == 1 ? 0 : start,
-                          ColsAtCompileTime == 1 ? 0 : start);
-}
-
-/** \returns a fixed-size expression of the first coefficients of *this.
-  *
-  * \only_for_vectors
-  *
-  * The template parameter \a Size is the number of coefficients in the block
-  *
-  * \addexample BlockStart \label How to reference the start of a vector (fixed-size)
-  *
-  * Example: \include MatrixBase_template_int_start.cpp
-  * Output: \verbinclude MatrixBase_template_int_start.out
-  *
-  * \sa class Block
-  */
-template<typename Derived>
-template<int Size>
-inline typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::start()
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived, (RowsAtCompileTime == 1 ? 1 : Size),
-                        (ColsAtCompileTime == 1 ? 1 : Size)>(derived(), 0, 0);
-}
-
-/** This is the const version of start<int>().*/
-template<typename Derived>
-template<int Size>
-inline const typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::start() const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived, (RowsAtCompileTime == 1 ? 1 : Size),
-                        (ColsAtCompileTime == 1 ? 1 : Size)>(derived(), 0, 0);
-}
-
-/** \returns a fixed-size expression of the last coefficients of *this.
-  *
-  * \only_for_vectors
-  *
-  * The template parameter \a Size is the number of coefficients in the block
-  *
-  * Example: \include MatrixBase_template_int_end.cpp
-  * Output: \verbinclude MatrixBase_template_int_end.out
-  *
-  * \sa class Block
-  */
-template<typename Derived>
-template<int Size>
-inline typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::end()
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived, RowsAtCompileTime == 1 ? 1 : Size,
-                        ColsAtCompileTime == 1 ? 1 : Size>
-           (derived(),
-            RowsAtCompileTime == 1 ? 0 : rows() - Size,
-            ColsAtCompileTime == 1 ? 0 : cols() - Size);
-}
-
-/** This is the const version of end<int>.*/
-template<typename Derived>
-template<int Size>
-inline const typename BlockReturnType<Derived,Size>::SubVectorType
-MatrixBase<Derived>::end() const
-{
-  EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return Block<Derived, RowsAtCompileTime == 1 ? 1 : Size,
-                        ColsAtCompileTime == 1 ? 1 : Size>
-           (derived(),
-            RowsAtCompileTime == 1 ? 0 : rows() - Size,
-            ColsAtCompileTime == 1 ? 0 : cols() - Size);
-}
-
 /** \returns a dynamic-size expression of a corner of *this.
   *
   * \param type the type of corner. Can be \a Eigen::TopLeft, \a Eigen::TopRight,
   * \a Eigen::BottomLeft, \a Eigen::BottomRight.
   * \param cRows the number of rows in the corner
   * \param cCols the number of columns in the corner
-  *
-  * \addexample BlockCornerDynamicSize \label How to reference a sub-corner of a matrix
   *
   * Example: \include MatrixBase_corner_enum_int_int.cpp
   * Output: \verbinclude MatrixBase_corner_enum_int_int.out
@@ -675,8 +448,6 @@ MatrixBase<Derived>::corner(CornerType type) const
   * \param startRow the first row in the block
   * \param startCol the first column in the block
   *
-  * \addexample BlockSubMatrixFixedSize \label How to reference a sub-matrix (fixed-size)
-  *
   * Example: \include MatrixBase_block_int_int.cpp
   * Output: \verbinclude MatrixBase_block_int_int.out
   *
@@ -704,8 +475,6 @@ MatrixBase<Derived>::block(int startRow, int startCol) const
 
 /** \returns an expression of the \a i-th column of *this. Note that the numbering starts at 0.
   *
-  * \addexample BlockColumn \label How to reference a single column of a matrix
-  *
   * Example: \include MatrixBase_col.cpp
   * Output: \verbinclude MatrixBase_col.out
   *
@@ -726,8 +495,6 @@ MatrixBase<Derived>::col(int i) const
 }
 
 /** \returns an expression of the \a i-th row of *this. Note that the numbering starts at 0.
-  *
-  * \addexample BlockRow \label How to reference a single row of a matrix
   *
   * Example: \include MatrixBase_row.cpp
   * Output: \verbinclude MatrixBase_row.out

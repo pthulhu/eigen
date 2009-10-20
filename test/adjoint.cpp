@@ -1,5 +1,5 @@
 // This file is part of Eigen, a lightweight C++ template library
-// for linear algebra. Eigen itself is part of the KDE project.
+// for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
@@ -21,7 +21,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License and a copy of the GNU General Public License along with
 // Eigen. If not, see <http://www.gnu.org/licenses/>.
-#define EIGEN_NO_ASSERTION_CHECKING
+
 #include "main.h"
 
 template<typename MatrixType> void adjoint(const MatrixType& m)
@@ -65,18 +65,13 @@ template<typename MatrixType> void adjoint(const MatrixType& m)
 
   // check basic properties of dot, norm, norm2
   typedef typename NumTraits<Scalar>::Real RealScalar;
-  VERIFY(ei_isApprox((s1 * v1 + s2 * v2).dot(v3),     s1 * v1.dot(v3) + s2 * v2.dot(v3), largerEps));
-  VERIFY(ei_isApprox(v3.dot(s1 * v1 + s2 * v2),       ei_conj(s1)*v3.dot(v1)+ei_conj(s2)*v3.dot(v2), largerEps));
+  VERIFY(ei_isApprox((s1 * v1 + s2 * v2).dot(v3),     ei_conj(s1) * v1.dot(v3) + ei_conj(s2) * v2.dot(v3), largerEps));
+  VERIFY(ei_isApprox(v3.dot(s1 * v1 + s2 * v2),       s1*v3.dot(v1)+s2*v3.dot(v2), largerEps));
   VERIFY_IS_APPROX(ei_conj(v1.dot(v2)),               v2.dot(v1));
   VERIFY_IS_APPROX(ei_abs(v1.dot(v1)),                v1.squaredNorm());
   if(NumTraits<Scalar>::HasFloatingPoint)
     VERIFY_IS_APPROX(v1.squaredNorm(),                v1.norm() * v1.norm());
   VERIFY_IS_MUCH_SMALLER_THAN(ei_abs(vzero.dot(v1)),  static_cast<RealScalar>(1));
-  if(NumTraits<Scalar>::HasFloatingPoint)
-  {
-    VERIFY_IS_MUCH_SMALLER_THAN(vzero.norm(),         static_cast<RealScalar>(1));
-    VERIFY_IS_APPROX(v1.norm(),                       v1.stableNorm());
-  }
 
   // check compatibility of dot and adjoint
   VERIFY(ei_isApprox(v1.dot(square * v2), (square.adjoint() * v1).dot(v2), largerEps));
@@ -108,7 +103,6 @@ template<typename MatrixType> void adjoint(const MatrixType& m)
   m3.transposeInPlace();
   VERIFY_IS_APPROX(m3,m1.conjugate());
 
-  
 }
 
 void test_adjoint()
@@ -123,5 +117,16 @@ void test_adjoint()
   }
   // test a large matrix only once
   CALL_SUBTEST( adjoint(Matrix<float, 100, 100>()) );
+
+  {
+    MatrixXcf a(10,10), b(10,10);
+    VERIFY_RAISES_ASSERT(a = a.transpose());
+    VERIFY_RAISES_ASSERT(a = a.transpose() + b);
+    VERIFY_RAISES_ASSERT(a = b + a.transpose());
+    VERIFY_RAISES_ASSERT(a = a.conjugate().transpose());
+    VERIFY_RAISES_ASSERT(a = a.adjoint());
+    VERIFY_RAISES_ASSERT(a = a.adjoint() + b);
+    VERIFY_RAISES_ASSERT(a = b + a.adjoint());
+  }
 }
 
