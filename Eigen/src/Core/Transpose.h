@@ -93,7 +93,8 @@ template<typename MatrixType> class TransposeImpl<MatrixType,Dense>
     typedef typename MatrixType::template MakeBase<Transpose<MatrixType> >::Type Base;
     EIGEN_DENSE_PUBLIC_INTERFACE(Transpose<MatrixType>)
 
-    inline int stride() const { return derived().nestedExpression().stride(); }
+    inline int innerStride() const { return derived().nestedExpression().innerStride(); }
+    inline int outerStride() const { return derived().nestedExpression().outerStride(); }
     inline Scalar* data() { return derived().nestedExpression().data(); }
     inline const Scalar* data() const { return derived().nestedExpression().data(); }
 
