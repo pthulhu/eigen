@@ -38,12 +38,12 @@ template<typename MatrixTypeA, typename MatrixTypeB, bool SwapPointers> struct e
 /**
 * \brief Dense storage base class for matrices and arrays.
 **/
-template<typename Derived, template<typename> class _Base, int _Options>
-class DenseStorageBase : public _Base<Derived>
+template<typename Derived>
+class DenseStorageBase : public DenseDirectAccessBase<Derived>
 {
   public:
-    enum { Options = _Options };
-    typedef _Base<Derived> Base;
+    enum { Options = ei_traits<Derived>::Options };
+    typedef typename ei_traits<Derived>::XprBase Base;
     typedef typename Base::PlainObject PlainObject;
     typedef typename Base::Scalar Scalar;
     typedef typename Base::PacketScalar PacketScalar;
@@ -157,10 +157,6 @@ class DenseStorageBase : public _Base<Derived>
       */
     inline void resize(int rows, int cols)
     {
-      ei_assert((MaxRowsAtCompileTime == Dynamic || MaxRowsAtCompileTime >= rows)
-             && (RowsAtCompileTime == Dynamic || RowsAtCompileTime == rows)
-             && (MaxColsAtCompileTime == Dynamic || MaxColsAtCompileTime >= cols)
-             && (ColsAtCompileTime == Dynamic || ColsAtCompileTime == cols));
       #ifdef EIGEN_INITIALIZE_MATRICES_BY_ZERO
         int size = rows*cols;
         bool size_changed = size != this->size();
@@ -477,22 +473,6 @@ class DenseStorageBase : public _Base<Derived>
       return ei_assign_selector<Derived,OtherDerived,false>::run(this->derived(), other.derived());
     }
 
-    EIGEN_STRONG_INLINE void _check_template_params()
-    {
-      EIGEN_STATIC_ASSERT(((RowsAtCompileTime >= MaxRowsAtCompileTime)
-                        && (ColsAtCompileTime >= MaxColsAtCompileTime)
-                        && (MaxRowsAtCompileTime >= 0)
-                        && (MaxColsAtCompileTime >= 0)
-                        && (RowsAtCompileTime <= Dynamic)
-                        && (ColsAtCompileTime <= Dynamic)
-                        && (MaxRowsAtCompileTime == RowsAtCompileTime || RowsAtCompileTime==Dynamic)
-                        && (MaxColsAtCompileTime == ColsAtCompileTime || ColsAtCompileTime==Dynamic)
-                        && ((MaxRowsAtCompileTime==Dynamic?1:MaxRowsAtCompileTime)*(MaxColsAtCompileTime==Dynamic?1:MaxColsAtCompileTime)<Dynamic)
-                        && (_Options & (DontAlign|RowMajor)) == _Options),
-        INVALID_MATRIX_TEMPLATE_PARAMETERS)
-    }
-
-
     template<typename T0, typename T1>
     EIGEN_STRONG_INLINE void _init2(int rows, int cols, typename ei_enable_if<Base::SizeAtCompileTime!=2,T0>::type* = 0)
     {
@@ -521,9 +501,27 @@ class DenseStorageBase : public _Base<Derived>
       enum { SwapPointers = ei_is_same_type<Derived, OtherDerived>::ret && Base::SizeAtCompileTime==Dynamic };
       ei_matrix_swap_impl<Derived, OtherDerived, bool(SwapPointers)>::run(this->derived(), other.const_cast_derived());
     }
+
+  public:
+#ifndef EIGEN_PARSED_BY_DOXYGEN
+    EIGEN_STRONG_INLINE static void _check_template_params()
+    {
+      EIGEN_STATIC_ASSERT((EIGEN_IMPLIES(MaxRowsAtCompileTime==1 && MaxColsAtCompileTime!=1, (Options&RowMajor)==RowMajor)
+                        && EIGEN_IMPLIES(MaxColsAtCompileTime==1 && MaxRowsAtCompileTime!=1, (Options&RowMajor)==0)
+                        && (RowsAtCompileTime >= MaxRowsAtCompileTime)
+                        && (ColsAtCompileTime >= MaxColsAtCompileTime)
+                        && (MaxRowsAtCompileTime >= 0)
+                        && (MaxColsAtCompileTime >= 0)
+                        && (RowsAtCompileTime <= Dynamic)
+                        && (ColsAtCompileTime <= Dynamic)
+                        && (MaxRowsAtCompileTime == RowsAtCompileTime || RowsAtCompileTime==Dynamic)
+                        && (MaxColsAtCompileTime == ColsAtCompileTime || ColsAtCompileTime==Dynamic)
+                        && ((MaxRowsAtCompileTime==Dynamic?1:MaxRowsAtCompileTime)*(MaxColsAtCompileTime==Dynamic?1:MaxColsAtCompileTime)<Dynamic)
+                        && (Options & (DontAlign|RowMajor)) == Options),
+        INVALID_MATRIX_TEMPLATE_PARAMETERS)
+    }
+#endif
 };
-
-
 
 template <typename Derived, typename OtherDerived, bool IsVector>
 struct ei_conservative_resize_like_impl

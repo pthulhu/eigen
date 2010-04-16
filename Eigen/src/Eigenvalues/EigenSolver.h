@@ -104,14 +104,14 @@ template<typename _MatrixType> class EigenSolver
       * This is a column vector with entries of type #ComplexScalar.
       * The length of the vector is the size of \p _MatrixType.
       */
-    typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options, MaxColsAtCompileTime, 1> EigenvalueType;
+    typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> EigenvalueType;
 
     /** \brief Type for matrix of eigenvectors as returned by eigenvectors(). 
       *
       * This is a square matrix with entries of type #ComplexScalar. 
       * The size is the same as the size of \p _MatrixType.
       */
-    typedef Matrix<ComplexScalar, RowsAtCompileTime, ColsAtCompileTime, Options, MaxRowsAtCompileTime, MaxColsAtCompileTime> EigenvectorType;
+    typedef Matrix<ComplexScalar, RowsAtCompileTime, ColsAtCompileTime, Options, MaxRowsAtCompileTime, MaxColsAtCompileTime> EigenvectorsType;
 
     /** \brief Default constructor.
       *
@@ -160,7 +160,7 @@ template<typename _MatrixType> class EigenSolver
       *
       * \sa eigenvalues(), pseudoEigenvectors()
       */
-    EigenvectorType eigenvectors() const;
+    EigenvectorsType eigenvectors() const;
 
     /** \brief Returns the pseudo-eigenvectors of given matrix. 
       *
@@ -279,11 +279,11 @@ MatrixType EigenSolver<MatrixType>::pseudoEigenvalueMatrix() const
 }
 
 template<typename MatrixType>
-typename EigenSolver<MatrixType>::EigenvectorType EigenSolver<MatrixType>::eigenvectors() const
+typename EigenSolver<MatrixType>::EigenvectorsType EigenSolver<MatrixType>::eigenvectors() const
 {
   ei_assert(m_isInitialized && "EigenSolver is not initialized.");
   int n = m_eivec.cols();
-  EigenvectorType matV(n,n);
+  EigenvectorsType matV(n,n);
   for (int j=0; j<n; ++j)
   {
     if (ei_isMuchSmallerThan(ei_abs(ei_imag(m_eivalues.coeff(j))), ei_abs(ei_real(m_eivalues.coeff(j)))))

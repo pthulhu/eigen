@@ -43,7 +43,7 @@ struct ei_traits<Replicate<MatrixType,RowFactor,ColFactor> >
  : ei_traits<MatrixType>
 {
   typedef typename MatrixType::Scalar Scalar;
-  typedef typename ei_traits<MatrixType>::StorageType StorageType;
+  typedef typename ei_traits<MatrixType>::StorageKind StorageKind;
   typedef typename ei_nested<MatrixType>::type MatrixTypeNested;
   typedef typename ei_unref<MatrixTypeNested>::type _MatrixTypeNested;
   enum {
@@ -53,9 +53,13 @@ struct ei_traits<Replicate<MatrixType,RowFactor,ColFactor> >
     ColsAtCompileTime = ColFactor==Dynamic || int(MatrixType::ColsAtCompileTime)==Dynamic
                       ? Dynamic
                       : ColFactor * MatrixType::ColsAtCompileTime,
+   //FIXME we don't propagate the max sizes !!!
     MaxRowsAtCompileTime = RowsAtCompileTime,
     MaxColsAtCompileTime = ColsAtCompileTime,
-    Flags = (_MatrixTypeNested::Flags & HereditaryBits),
+    IsRowMajor = MaxRowsAtCompileTime==1 && MaxColsAtCompileTime!=1 ? 1
+               : MaxColsAtCompileTime==1 && MaxRowsAtCompileTime!=1 ? 0
+               : (MatrixType::Flags & RowMajorBit) ? 1 : 0,
+    Flags = (_MatrixTypeNested::Flags & HereditaryBits & ~RowMajorBit) | (IsRowMajor ? RowMajorBit : 0),
     CoeffReadCost = _MatrixTypeNested::CoeffReadCost
   };
 };

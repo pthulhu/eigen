@@ -48,12 +48,12 @@ struct ei_product_packet_impl;
 template<typename LhsNested, typename RhsNested, int NestingFlags>
 struct ei_traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
 {
-  typedef DenseStorageMatrix DenseStorageType;
+  typedef MatrixXpr XprKind;
   typedef typename ei_cleantype<LhsNested>::type _LhsNested;
   typedef typename ei_cleantype<RhsNested>::type _RhsNested;
   typedef typename ei_scalar_product_traits<typename _LhsNested::Scalar, typename _RhsNested::Scalar>::ReturnType Scalar;
-  typedef typename ei_promote_storage_type<typename ei_traits<_LhsNested>::StorageType,
-                                           typename ei_traits<_RhsNested>::StorageType>::ret StorageType;
+  typedef typename ei_promote_storage_type<typename ei_traits<_LhsNested>::StorageKind,
+                                           typename ei_traits<_RhsNested>::StorageKind>::ret StorageKind;
 
   enum {
       LhsCoeffReadCost = _LhsNested::CoeffReadCost,
@@ -72,19 +72,27 @@ struct ei_traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
       RhsRowMajor = RhsFlags & RowMajorBit,
 
       CanVectorizeRhs = RhsRowMajor && (RhsFlags & PacketAccessBit)
-                      && (ColsAtCompileTime == Dynamic || (ColsAtCompileTime % ei_packet_traits<Scalar>::size) == 0),
+                      && (ColsAtCompileTime == Dynamic
+                          || ( (ColsAtCompileTime % ei_packet_traits<Scalar>::size) == 0
+                              && (RhsFlags&AlignedBit)
+                             )
+                         ),
 
       CanVectorizeLhs = (!LhsRowMajor) && (LhsFlags & PacketAccessBit)
-                      && (RowsAtCompileTime == Dynamic || (RowsAtCompileTime % ei_packet_traits<Scalar>::size) == 0),
+                      && (RowsAtCompileTime == Dynamic
+                          || ( (RowsAtCompileTime % ei_packet_traits<Scalar>::size) == 0
+                              && (LhsFlags&AlignedBit)
+                             )
+                         ),
 
-      EvalToRowMajor = RhsRowMajor && (!CanVectorizeLhs),
+      EvalToRowMajor = (MaxRowsAtCompileTime==1&&MaxColsAtCompileTime!=1) ? 1
+                     : (MaxColsAtCompileTime==1&&MaxRowsAtCompileTime!=1) ? 0
+                     : (RhsRowMajor && !CanVectorizeLhs),
 
-      RemovedBits = ~(EvalToRowMajor ? 0 : RowMajorBit),
-
-      Flags = ((unsigned int)(LhsFlags | RhsFlags) & HereditaryBits & RemovedBits)
+      Flags = ((unsigned int)(LhsFlags | RhsFlags) & HereditaryBits & ~RowMajorBit)
+            | (EvalToRowMajor ? RowMajorBit : 0)
             | NestingFlags
-            | (CanVectorizeLhs || CanVectorizeRhs ? PacketAccessBit : 0)
-            | (LhsFlags & RhsFlags & AlignedBit),
+            | (CanVectorizeLhs || CanVectorizeRhs ? PacketAccessBit : 0),
 
       CoeffReadCost = InnerSize == Dynamic ? Dynamic
                     : InnerSize * (NumTraits<Scalar>::MulCost + LhsCoeffReadCost + RhsCoeffReadCost)
@@ -95,8 +103,11 @@ struct ei_traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
       * loop of the product might be vectorized. This is the meaning of CanVectorizeInner. Since it doesn't affect
       * the Flags, it is safe to make this value depend on ActualPacketAccessBit, that doesn't affect the ABI.
       */
-      CanVectorizeInner = LhsRowMajor && (!RhsRowMajor) && (LhsFlags & RhsFlags & ActualPacketAccessBit)
-                        && (InnerSize % ei_packet_traits<Scalar>::size == 0)
+      CanVectorizeInner =    LhsRowMajor
+                          && (!RhsRowMajor)
+                          && (LhsFlags & RhsFlags & ActualPacketAccessBit)
+                          && (LhsFlags & RhsFlags & AlignedBit)
+                          && (InnerSize % ei_packet_traits<Scalar>::size == 0)
     };
 };
 

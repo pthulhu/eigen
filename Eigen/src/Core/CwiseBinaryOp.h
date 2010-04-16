@@ -54,8 +54,8 @@ struct ei_traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> > : ei_traits<Lhs>
                        typename Rhs::Scalar
                      )
                    >::type Scalar;
-  typedef typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageType,
-                                           typename ei_traits<Rhs>::StorageType>::ret StorageType;
+  typedef typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageKind,
+                                           typename ei_traits<Rhs>::StorageKind>::ret StorageKind;
   typedef typename Lhs::Nested LhsNested;
   typedef typename Rhs::Nested RhsNested;
   typedef typename ei_unref<LhsNested>::type _LhsNested;
@@ -66,7 +66,7 @@ struct ei_traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> > : ei_traits<Lhs>
     LhsFlags = _LhsNested::Flags,
     RhsFlags = _RhsNested::Flags,
     StorageOrdersAgree = (int(Lhs::Flags)&RowMajorBit)==(int(Rhs::Flags)&RowMajorBit),
-    Flags = (int(LhsFlags) | int(RhsFlags)) & (
+    Flags0 = (int(LhsFlags) | int(RhsFlags)) & (
         HereditaryBits
       | (int(LhsFlags) & int(RhsFlags) &
            ( AlignedBit
@@ -75,26 +75,27 @@ struct ei_traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> > : ei_traits<Lhs>
            )
         )
      ),
+    Flags = (Flags0 & ~RowMajorBit) | (LhsFlags & RowMajorBit),
     CoeffReadCost = LhsCoeffReadCost + RhsCoeffReadCost + ei_functor_traits<BinaryOp>::Cost
   };
 };
 
-template<typename BinaryOp, typename Lhs, typename Rhs, typename StorageType>
+template<typename BinaryOp, typename Lhs, typename Rhs, typename StorageKind>
 class CwiseBinaryOpImpl;
 
 template<typename BinaryOp, typename Lhs, typename Rhs>
 class CwiseBinaryOp : ei_no_assignment_operator,
   public CwiseBinaryOpImpl<
           BinaryOp, Lhs, Rhs,
-          typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageType,
-                                           typename ei_traits<Rhs>::StorageType>::ret>
+          typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageKind,
+                                           typename ei_traits<Rhs>::StorageKind>::ret>
 {
   public:
 
     typedef typename CwiseBinaryOpImpl<
         BinaryOp, Lhs, Rhs,
-        typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageType,
-                                         typename ei_traits<Rhs>::StorageType>::ret>::Base Base;
+        typename ei_promote_storage_type<typename ei_traits<Lhs>::StorageKind,
+                                         typename ei_traits<Rhs>::StorageKind>::ret>::Base Base;
     EIGEN_GENERIC_PUBLIC_INTERFACE_NEW(CwiseBinaryOp)
 
     typedef typename ei_nested<Lhs>::type LhsNested;

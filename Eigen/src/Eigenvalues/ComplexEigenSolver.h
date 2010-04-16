@@ -67,7 +67,7 @@ template<typename _MatrixType> class ComplexEigenSolver
     /** \brief Scalar type for matrices of type \p _MatrixType. */
     typedef typename MatrixType::Scalar Scalar;
     typedef typename NumTraits<Scalar>::Real RealScalar;
-    
+
     /** \brief Complex scalar type for \p _MatrixType. 
       *
       * This is \c std::complex<Scalar> if #Scalar is real (e.g.,

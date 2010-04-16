@@ -77,7 +77,7 @@ template<typename _MatrixType> class HessenbergDecomposition
       * vector is one less than the size of \p _MatrixType, if it is a
       * fixed-side type.
       */
-    typedef Matrix<Scalar, SizeMinusOne, 1, Options, MaxSizeMinusOne, 1> CoeffVectorType;
+    typedef Matrix<Scalar, SizeMinusOne, 1, Options & ~RowMajor, MaxSizeMinusOne, 1> CoeffVectorType;
 
     /** \brief Default constructor; the decomposition will be computed later.
       *
@@ -227,7 +227,7 @@ template<typename _MatrixType> class HessenbergDecomposition
   private:
 
     static void _compute(MatrixType& matA, CoeffVectorType& hCoeffs);
-    typedef Matrix<Scalar, 1, Size, Options, 1, MaxSize> VectorType;
+    typedef Matrix<Scalar, 1, Size, Options | RowMajor, 1, MaxSize> VectorType;
     typedef typename NumTraits<Scalar>::Real RealScalar;
 
   protected:

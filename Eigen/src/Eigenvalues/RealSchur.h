@@ -77,7 +77,7 @@ template<typename _MatrixType> class RealSchur
     };
     typedef typename MatrixType::Scalar Scalar;
     typedef std::complex<typename NumTraits<Scalar>::Real> ComplexScalar;
-    typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options, MaxColsAtCompileTime, 1> EigenvalueType;
+    typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> EigenvalueType;
 
     /** \brief Default constructor.
       *
@@ -190,7 +190,7 @@ void RealSchur<MatrixType>::compute(const MatrixType& matrix)
   m_matU = hess.matrixQ();
 
   // Step 2. Reduce to real Schur form  
-  typedef Matrix<Scalar, ColsAtCompileTime, 1, Options, MaxColsAtCompileTime, 1> ColumnVectorType;
+  typedef Matrix<Scalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> ColumnVectorType;
   ColumnVectorType workspaceVector(m_matU.cols());
   Scalar* workspace = &workspaceVector.coeffRef(0);
 

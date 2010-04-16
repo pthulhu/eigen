@@ -51,7 +51,7 @@ struct ei_traits<PartialReduxExpr<MatrixType, MemberOp, Direction> >
  : ei_traits<MatrixType>
 {
   typedef typename MemberOp::result_type Scalar;
-  typedef typename ei_traits<MatrixType>::StorageType StorageType;
+  typedef typename ei_traits<MatrixType>::StorageKind StorageKind;
   typedef typename MatrixType::Scalar InputScalar;
   typedef typename ei_nested<MatrixType>::type MatrixTypeNested;
   typedef typename ei_cleantype<MatrixTypeNested>::type _MatrixTypeNested;
@@ -60,7 +60,8 @@ struct ei_traits<PartialReduxExpr<MatrixType, MemberOp, Direction> >
     ColsAtCompileTime = Direction==Horizontal ? 1 : MatrixType::ColsAtCompileTime,
     MaxRowsAtCompileTime = Direction==Vertical   ? 1 : MatrixType::MaxRowsAtCompileTime,
     MaxColsAtCompileTime = Direction==Horizontal ? 1 : MatrixType::MaxColsAtCompileTime,
-    Flags = (unsigned int)_MatrixTypeNested::Flags & HereditaryBits,
+    Flags0 = (unsigned int)_MatrixTypeNested::Flags & HereditaryBits,
+    Flags = (Flags0 & ~RowMajorBit) | (RowsAtCompileTime == 1 ? RowMajorBit : 0),
     TraversalSize = Direction==Vertical ? RowsAtCompileTime : ColsAtCompileTime
   };
   #if EIGEN_GNUC_AT_LEAST(3,4)

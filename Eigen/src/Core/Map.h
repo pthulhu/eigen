@@ -79,33 +79,31 @@ struct ei_traits<Map<MatrixType, Options, StrideType> >
 {
   typedef typename MatrixType::Scalar Scalar;
   enum {
-    InnerStride = StrideType::InnerStrideAtCompileTime,
-    OuterStride = StrideType::OuterStrideAtCompileTime,
-    HasNoInnerStride = InnerStride <= 1,
-    HasNoOuterStride = OuterStride == 0,
+    InnerStrideAtCompileTime = StrideType::InnerStrideAtCompileTime,
+    OuterStrideAtCompileTime = StrideType::OuterStrideAtCompileTime,
+    HasNoInnerStride = InnerStrideAtCompileTime <= 1,
+    HasNoOuterStride = OuterStrideAtCompileTime == 0,
     HasNoStride = HasNoInnerStride && HasNoOuterStride,
     IsAligned = int(int(Options)&Aligned)==Aligned,
     IsDynamicSize = MatrixType::SizeAtCompileTime==Dynamic,
     KeepsPacketAccess = bool(HasNoInnerStride)
                         && ( bool(IsDynamicSize)
                            || HasNoOuterStride
-                           || ( OuterStride!=Dynamic && ((int(OuterStride)*sizeof(Scalar))%16)==0 ) ),
+                           || ( OuterStrideAtCompileTime!=Dynamic
+                                && ((int(OuterStrideAtCompileTime)*sizeof(Scalar))%16)==0 ) ),
     Flags0 = ei_traits<MatrixType>::Flags,
-    Flags1 = IsAligned ? int(Flags0) |  AlignedBit : int(Flags0) & ~AlignedBit,
+    Flags1 = IsAligned ? int(Flags0) | AlignedBit : int(Flags0) & ~AlignedBit,
     Flags2 = HasNoStride ? int(Flags1) : int(Flags1 & ~LinearAccessBit),
     Flags = KeepsPacketAccess ? int(Flags2) : (int(Flags2) & ~PacketAccessBit)
   };
 };
 
 template<typename MatrixType, int Options, typename StrideType> class Map
-  : public MapBase<Map<MatrixType, Options, StrideType>,
-                   typename MatrixType::template MakeBase<
-                     Map<MatrixType, Options, StrideType>
-                   >::Type>
+  : public MapBase<Map<MatrixType, Options, StrideType> >
 {
   public:
 
-    typedef MapBase<Map,typename MatrixType::template MakeBase<Map>::Type> Base;
+    typedef MapBase<Map> Base;
 
     EIGEN_DENSE_PUBLIC_INTERFACE(Map)
 
@@ -128,7 +126,10 @@ template<typename MatrixType, int Options, typename StrideType> class Map
       * \param stride optional Stride object, passing the strides.
       */
     inline Map(const Scalar* data, const StrideType& stride = StrideType())
-      : Base(data), m_stride(stride) {}
+      : Base(data), m_stride(stride)
+    {
+      MatrixType::Base::_check_template_params();
+    }
 
     /** Constructor in the dynamic-size vector case.
       *
@@ -137,7 +138,10 @@ template<typename MatrixType, int Options, typename StrideType> class Map
       * \param stride optional Stride object, passing the strides.
       */
     inline Map(const Scalar* data, int size, const StrideType& stride = StrideType())
-      : Base(data, size), m_stride(stride) {}
+      : Base(data, size), m_stride(stride)
+    {
+      MatrixType::Base::_check_template_params();
+    }
 
     /** Constructor in the dynamic-size matrix case.
       *
@@ -147,7 +151,11 @@ template<typename MatrixType, int Options, typename StrideType> class Map
       * \param stride optional Stride object, passing the strides.
       */
     inline Map(const Scalar* data, int rows, int cols, const StrideType& stride = StrideType())
-      : Base(data, rows, cols), m_stride(stride) {}
+      : Base(data, rows, cols), m_stride(stride)
+    {
+      MatrixType::Base::_check_template_params();
+    }
+
 
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Map)
 
@@ -155,8 +163,8 @@ template<typename MatrixType, int Options, typename StrideType> class Map
     StrideType m_stride;
 };
 
-template<typename _Scalar, int _Rows, int _Cols, int _StorageOrder, int _MaxRows, int _MaxCols>
-inline Matrix<_Scalar, _Rows, _Cols, _StorageOrder, _MaxRows, _MaxCols>
+template<typename _Scalar, int _Rows, int _Cols, int _Options, int _MaxRows, int _MaxCols>
+inline Matrix<_Scalar, _Rows, _Cols, _Options, _MaxRows, _MaxCols>
   ::Matrix(const Scalar *data)
 {
   _set_noalias(Eigen::Map<Matrix>(data));

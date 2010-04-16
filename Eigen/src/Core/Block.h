@@ -61,27 +61,46 @@ template<typename MatrixType, int BlockRows, int BlockCols, int _DirectAccessSta
 struct ei_traits<Block<MatrixType, BlockRows, BlockCols, _DirectAccessStatus> > : ei_traits<MatrixType>
 {
   typedef typename ei_traits<MatrixType>::Scalar Scalar;
+  typedef typename ei_traits<MatrixType>::StorageKind StorageKind;
+  typedef typename ei_traits<MatrixType>::XprKind XprKind;
   typedef typename ei_nested<MatrixType>::type MatrixTypeNested;
   typedef typename ei_unref<MatrixTypeNested>::type _MatrixTypeNested;
   enum{
-    RowsAtCompileTime = BlockRows,
-    ColsAtCompileTime = BlockCols,
-    MaxRowsAtCompileTime = RowsAtCompileTime == 1 ? 1
-      : (BlockRows==Dynamic ? int(ei_traits<MatrixType>::MaxRowsAtCompileTime) : BlockRows),
-    MaxColsAtCompileTime = ColsAtCompileTime == 1 ? 1
-      : (BlockCols==Dynamic ? int(ei_traits<MatrixType>::MaxColsAtCompileTime) : BlockCols),
-    RowMajor = int(ei_traits<MatrixType>::Flags)&RowMajorBit,
-    InnerSize = RowMajor ? int(ColsAtCompileTime) : int(RowsAtCompileTime),
-    InnerMaxSize = RowMajor ? int(MaxColsAtCompileTime) : int(MaxRowsAtCompileTime),
-    MaskPacketAccessBit = (InnerMaxSize == Dynamic || (InnerSize >= ei_packet_traits<Scalar>::size))
+    MatrixRows = ei_traits<MatrixType>::RowsAtCompileTime,
+    MatrixCols = ei_traits<MatrixType>::ColsAtCompileTime,
+    RowsAtCompileTime = MatrixRows == 0 ? 0 : BlockRows,
+    ColsAtCompileTime = MatrixCols == 0 ? 0 : BlockCols,
+    MaxRowsAtCompileTime = BlockRows==0 ? 0
+                         : RowsAtCompileTime != Dynamic ? int(RowsAtCompileTime)
+                         : int(ei_traits<MatrixType>::MaxRowsAtCompileTime),
+    MaxColsAtCompileTime = BlockCols==0 ? 0
+                         : ColsAtCompileTime != Dynamic ? int(ColsAtCompileTime)
+                         : int(ei_traits<MatrixType>::MaxColsAtCompileTime),
+    MatrixTypeIsRowMajor = (int(ei_traits<MatrixType>::Flags)&RowMajorBit) != 0,
+    IsRowMajor = (MaxRowsAtCompileTime==1&&MaxColsAtCompileTime!=1) ? 1
+               : (MaxColsAtCompileTime==1&&MaxRowsAtCompileTime!=1) ? 0
+               : MatrixTypeIsRowMajor,
+    HasSameStorageOrderAsMatrixType = (IsRowMajor == MatrixTypeIsRowMajor),
+    InnerSize = MatrixTypeIsRowMajor // notice how it's MatrixTypeIsRowMajor here, not IsRowMajor. Inner size is computed wrt the host matrix's storage order.
+              ? int(ColsAtCompileTime) : int(RowsAtCompileTime),
+    InnerStrideAtCompileTime = HasSameStorageOrderAsMatrixType
+                             ? int(ei_inner_stride_at_compile_time<MatrixType>::ret)
+                             : int(ei_outer_stride_at_compile_time<MatrixType>::ret),
+    OuterStrideAtCompileTime = HasSameStorageOrderAsMatrixType
+                             ? int(ei_outer_stride_at_compile_time<MatrixType>::ret)
+                             : int(ei_inner_stride_at_compile_time<MatrixType>::ret),
+    MaskPacketAccessBit = (InnerSize == Dynamic || (InnerSize % ei_packet_traits<Scalar>::size) == 0)
+                       && (InnerStrideAtCompileTime == 1)
                         ? PacketAccessBit : 0,
     FlagsLinearAccessBit = (RowsAtCompileTime == 1 || ColsAtCompileTime == 1) ? LinearAccessBit : 0,
-    Flags = (ei_traits<MatrixType>::Flags & (HereditaryBits | MaskPacketAccessBit | DirectAccessBit)) | FlagsLinearAccessBit
+    Flags0 = ei_traits<MatrixType>::Flags & (HereditaryBits | MaskPacketAccessBit | DirectAccessBit),
+    Flags1 = Flags0 | FlagsLinearAccessBit,
+    Flags = (Flags1 & ~RowMajorBit) | (IsRowMajor ? RowMajorBit : 0)
   };
 };
 
 template<typename MatrixType, int BlockRows, int BlockCols, int _DirectAccessStatus> class Block
-  : public MatrixType::template MakeBase< Block<MatrixType, BlockRows, BlockCols, _DirectAccessStatus> >::Type
+  : public ei_dense_xpr_base<Block<MatrixType, BlockRows, BlockCols, _DirectAccessStatus> >::type
 {
   public:
 
@@ -212,12 +231,11 @@ template<typename MatrixType, int BlockRows, int BlockCols, int _DirectAccessSta
 /** \internal */
 template<typename MatrixType, int BlockRows, int BlockCols>
 class Block<MatrixType,BlockRows,BlockCols,HasDirectAccess>
-  : public MapBase<Block<MatrixType, BlockRows, BlockCols,HasDirectAccess>,
-                   typename MatrixType::template MakeBase< Block<MatrixType, BlockRows, BlockCols,HasDirectAccess> >::Type>
+  : public MapBase<Block<MatrixType, BlockRows, BlockCols,HasDirectAccess> >
 {
   public:
 
-    typedef MapBase<Block, typename MatrixType::template MakeBase<Block>::Type> Base;
+    typedef MapBase<Block> Base;
     EIGEN_DENSE_PUBLIC_INTERFACE(Block)
 
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Block)
@@ -263,15 +281,17 @@ class Block<MatrixType,BlockRows,BlockCols,HasDirectAccess>
     /** \sa MapBase::innerStride() */
     inline int innerStride() const
     {
-      return RowsAtCompileTime==1 ? m_matrix.colStride()
-           : ColsAtCompileTime==1 ? m_matrix.rowStride()
-           : m_matrix.innerStride();
+      return ei_traits<Block>::HasSameStorageOrderAsMatrixType
+             ? m_matrix.innerStride()
+             : m_matrix.outerStride();
     }
-    
+
     /** \sa MapBase::outerStride() */
     inline int outerStride() const
     {
-      return IsVectorAtCompileTime ? this->size() : m_matrix.outerStride();
+      return ei_traits<Block>::HasSameStorageOrderAsMatrixType
+             ? m_matrix.outerStride()
+             : m_matrix.innerStride();
     }
 
   #ifndef __SUNPRO_CC
