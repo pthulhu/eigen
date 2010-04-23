@@ -7,35 +7,74 @@ and to help porting an application from Eigen2 to Eigen3.
 
 \b Table \b of \b contents
   - \ref CompatibilitySupport
-  - \ref ChangeList
+  - \ref VectorBlocks
+  - \ref TriangularViews
+  - \ref TriangularSolveInPlace
+  - \ref Using
   - \ref CoefficientWiseOperations
+  - \ref Corners
   - \ref LazyVsNoalias
 
 \section CompatibilitySupport Eigen2 compatibility support
 
-In order to ease the switch from Eigen2 to Eigen3, Eigen3 features a compatibility mode which can be enabled by defining the EIGEN2_SUPPORT preprocessor token \b before including any Eigen's header (typically it should be set in your project options).
+In order to ease the switch from Eigen2 to Eigen3, Eigen3 features a compatibility mode which can be enabled by defining the EIGEN2_SUPPORT preprocessor token \b before including any Eigen header (typically it should be set in your project options).
 
-\section ChangeList List of changes in the API
+\section VectorBlocks Vector blocks
 
 <table>
-<tr><td>Eigen 2</td><td>Eigen 3</td><td>Comments</td></tr>
+<tr><td>Eigen 2</td><td>Eigen 3</td></tr>
 <tr><td>\code
-vec.start(length)
-vec.start<length>()
-vec.end(length)
-vec.end<length>()
+vector.start(length)
+vector.start<length>()
+vector.end(length)
+vector.end<length>()
 \endcode</td><td>\code
-vec.head(length)
-vec.head<length>()
-vec.tail(length)
-vec.tail<length>()
-\endcode</td><td>Trivial "search and replace".</td></tr>
-<tr><td colspan="3"></td></tr>
-<tr><td>\code mat.cwise().XXX()\endcode</td><td>\code mat.array().XXX()\endcode</td><td>See \ref CoefficientWiseOperations. </td></tr>
-<tr><td colspan="3"></td></tr>
-<tr><td>\code c = (a * b).lazy();\endcode</td><td>\code c.noalias() = a * b;\endcode</td><td>See \ref LazyVsNoalias. </td></tr>
-<tr><td colspan="3"></td></tr>
-<tr><td>\code A.triangularSolveInPlace<XXX>(X);\endcode</td><td>\code A.triangularView<XXX>().solveInPlace(X);\endcode</td><td></td></tr>
+vector.head(length)
+vector.head<length>()
+vector.tail(length)
+vector.tail<length>()
+\endcode</td></tr>
+</table>
+
+
+\section Corners Matrix Corners
+
+<table>
+<tr><td>Eigen 2</td><td>Eigen 3</td></tr>
+<tr><td>\code
+matrix.corner(TopLeft,r,c)
+matrix.corner(TopRight,r,c)
+matrix.corner(BottomLeft,r,c)
+matrix.corner(BottomRight,r,c)
+matrix.corner<r,c>(TopLeft)
+matrix.corner<r,c>(TopRight)
+matrix.corner<r,c>(BottomLeft)
+matrix.corner<r,c>(BottomRight)
+\endcode</td><td>\code
+matrix.topLeftCorner(r,c)
+matrix.topRightCorner(r,c)
+matrix.bottomLeftCorner(r,c)
+matrix.bottomRightCorner(r,c)
+matrix.topLeftCorner<r,c>()
+matrix.topRightCorner<r,c>()
+matrix.bottomLeftCorner<r,c>()
+matrix.bottomRightCorner<r,c>()
+\endcode</td>
+</tr>
+</table>
+
+Notice that Eigen3 also provides these new convenience methods: topRows(), bottomRows(), leftCols(), rightCols(). See in class DenseBase.
+
+
+\section TriangularViews Triangular views
+
+TODO: fill this section
+
+\section TriangularSolveInPlace Triangular in-place solving
+
+<table>
+<tr><td>Eigen 2</td><td>Eigen 3</td></tr>
+<tr><td>\code A.triangularSolveInPlace<XXX>(X);\endcode</td><td>\code A.triangularView<XXX>().solveInPlace(X);\endcode</td></tr>
 <tr><td colspan="3"></td></tr>
 <tr><td>\code
 UpperTriangular
@@ -52,8 +91,16 @@ UnitLower
 StrictlyUpper
 StrictlyLower
 \endcode</td>
-<td>Trivial "search and replace".</td></tr>
+</tr>
 </table>
+
+\section Using The USING_PART_OF_NAMESPACE_EIGEN macro
+
+The USING_PART_OF_NAMESPACE_EIGEN macro has been removed. In Eigen 3, just do:
+\code
+using namespace Eigen;
+\endcode
+
 
 \section CoefficientWiseOperations Coefficient wise operations
 
