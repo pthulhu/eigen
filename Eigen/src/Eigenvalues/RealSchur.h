@@ -50,13 +50,13 @@
   * the eigendecomposition of a matrix.
   *
   * Call the function compute() to compute the real Schur decomposition of a
-  * given matrix. Alternatively, you can use the RealSchur(const MatrixType&)
+  * given matrix. Alternatively, you can use the RealSchur(const MatrixType&, bool)
   * constructor which computes the real Schur decomposition at construction
   * time. Once the decomposition is computed, you can use the matrixU() and
   * matrixT() functions to retrieve the matrices U and T in the decomposition.
   *
-  * The documentation of RealSchur(const MatrixType&) contains an example of
-  * the typical use of this class.
+  * The documentation of RealSchur(const MatrixType&, bool) contains an example
+  * of the typical use of this class.
   *
   * \note The implementation is adapted from
   * <a href="http://math.nist.gov/javanumerics/jama/">JAMA</a> (public domain).
@@ -77,6 +77,8 @@ template<typename _MatrixType> class RealSchur
     };
     typedef typename MatrixType::Scalar Scalar;
     typedef std::complex<typename NumTraits<Scalar>::Real> ComplexScalar;
+    typedef typename MatrixType::Index Index;
+
     typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> EigenvalueType;
     typedef Matrix<Scalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> ColumnVectorType;
 
@@ -91,46 +93,51 @@ template<typename _MatrixType> class RealSchur
       *
       * \sa compute() for an example.
       */
-    RealSchur(int size = RowsAtCompileTime==Dynamic ? 1 : RowsAtCompileTime)
+    RealSchur(Index size = RowsAtCompileTime==Dynamic ? 1 : RowsAtCompileTime)
             : m_matT(size, size),
               m_matU(size, size),
               m_workspaceVector(size),
               m_hess(size),
-              m_isInitialized(false)
+              m_isInitialized(false),
+              m_matUisUptodate(false)
     { }
 
     /** \brief Constructor; computes real Schur decomposition of given matrix. 
       * 
-      * \param[in]  matrix  Square matrix whose Schur decomposition is to be computed.
+      * \param[in]  matrix    Square matrix whose Schur decomposition is to be computed.
+      * \param[in]  computeU  If true, both T and U are computed; if false, only T is computed.
       *
       * This constructor calls compute() to compute the Schur decomposition.
       *
       * Example: \include RealSchur_RealSchur_MatrixType.cpp
       * Output: \verbinclude RealSchur_RealSchur_MatrixType.out
       */
-    RealSchur(const MatrixType& matrix)
+    RealSchur(const MatrixType& matrix, bool computeU = true)
             : m_matT(matrix.rows(),matrix.cols()),
               m_matU(matrix.rows(),matrix.cols()),
               m_workspaceVector(matrix.rows()),
               m_hess(matrix.rows()),
-              m_isInitialized(false)
+              m_isInitialized(false),
+              m_matUisUptodate(false)
     {
-      compute(matrix);
+      compute(matrix, computeU);
     }
 
     /** \brief Returns the orthogonal matrix in the Schur decomposition. 
       *
       * \returns A const reference to the matrix U.
       *
-      * \pre Either the constructor RealSchur(const MatrixType&) or the member
-      * function compute(const MatrixType&) has been called before to compute
-      * the Schur decomposition of a matrix.
+      * \pre Either the constructor RealSchur(const MatrixType&, bool) or the
+      * member function compute(const MatrixType&, bool) has been called before
+      * to compute the Schur decomposition of a matrix, and \p computeU was set
+      * to true (the default value).
       *
-      * \sa RealSchur(const MatrixType&) for an example
+      * \sa RealSchur(const MatrixType&, bool) for an example
       */
     const MatrixType& matrixU() const
     {
       ei_assert(m_isInitialized && "RealSchur is not initialized.");
+      ei_assert(m_matUisUptodate && "The matrix U has not been computed during the RealSchur decomposition.");
       return m_matU;
     }
 
@@ -138,11 +145,11 @@ template<typename _MatrixType> class RealSchur
       *
       * \returns A const reference to the matrix T.
       *
-      * \pre Either the constructor RealSchur(const MatrixType&) or the member
-      * function compute(const MatrixType&) has been called before to compute
-      * the Schur decomposition of a matrix.
+      * \pre Either the constructor RealSchur(const MatrixType&, bool) or the
+      * member function compute(const MatrixType&, bool) has been called before
+      * to compute the Schur decomposition of a matrix.
       *
-      * \sa RealSchur(const MatrixType&) for an example
+      * \sa RealSchur(const MatrixType&, bool) for an example
       */
     const MatrixType& matrixT() const
     {
@@ -152,19 +159,21 @@ template<typename _MatrixType> class RealSchur
   
     /** \brief Computes Schur decomposition of given matrix. 
       * 
-      * \param[in]  matrix  Square matrix whose Schur decomposition is to be computed.
+      * \param[in]  matrix    Square matrix whose Schur decomposition is to be computed.
+      * \param[in]  computeU  If true, both T and U are computed; if false, only T is computed.
       *
       * The Schur decomposition is computed by first reducing the matrix to
       * Hessenberg form using the class HessenbergDecomposition. The Hessenberg
       * matrix is then reduced to triangular form by performing Francis QR
       * iterations with implicit double shift. The cost of computing the Schur
       * decomposition depends on the number of iterations; as a rough guide, it
-      * may be taken to be \f$25n^3\f$ flops.
+      * may be taken to be \f$25n^3\f$ flops if \a computeU is true and
+      * \f$10n^3\f$ flops if \a computeU is false.
       *
       * Example: \include RealSchur_compute.cpp
       * Output: \verbinclude RealSchur_compute.out
       */
-    void compute(const MatrixType& matrix);
+    void compute(const MatrixType& matrix, bool computeU = true);
 
   private:
     
@@ -173,45 +182,46 @@ template<typename _MatrixType> class RealSchur
     ColumnVectorType m_workspaceVector;
     HessenbergDecomposition<MatrixType> m_hess;
     bool m_isInitialized;
+    bool m_matUisUptodate;
 
     typedef Matrix<Scalar,3,1> Vector3s;
 
     Scalar computeNormOfT();
-    int findSmallSubdiagEntry(int iu, Scalar norm);
-    void splitOffTwoRows(int iu, Scalar exshift);
-    void computeShift(int iu, int iter, Scalar& exshift, Vector3s& shiftInfo);
-    void initFrancisQRStep(int il, int iu, const Vector3s& shiftInfo, int& im, Vector3s& firstHouseholderVector);
-    void performFrancisQRStep(int il, int im, int iu, const Vector3s& firstHouseholderVector, Scalar* workspace);
+    Index findSmallSubdiagEntry(Index iu, Scalar norm);
+    void splitOffTwoRows(Index iu, bool computeU, Scalar exshift);
+    void computeShift(Index iu, Index iter, Scalar& exshift, Vector3s& shiftInfo);
+    void initFrancisQRStep(Index il, Index iu, const Vector3s& shiftInfo, Index& im, Vector3s& firstHouseholderVector);
+    void performFrancisQRStep(Index il, Index im, Index iu, bool computeU, const Vector3s& firstHouseholderVector, Scalar* workspace);
 };
 
 
 template<typename MatrixType>
-void RealSchur<MatrixType>::compute(const MatrixType& matrix)
+void RealSchur<MatrixType>::compute(const MatrixType& matrix, bool computeU)
 {
   assert(matrix.cols() == matrix.rows());
 
   // Step 1. Reduce to Hessenberg form
-  // TODO skip Q if skipU = true
   m_hess.compute(matrix);
   m_matT = m_hess.matrixH();
-  m_matU = m_hess.matrixQ();
+  if (computeU)
+    m_matU = m_hess.matrixQ();
 
   // Step 2. Reduce to real Schur form  
-  m_workspaceVector.resize(m_matU.cols());
+  m_workspaceVector.resize(m_matT.cols());
   Scalar* workspace = &m_workspaceVector.coeffRef(0);
 
   // The matrix m_matT is divided in three parts. 
   // Rows 0,...,il-1 are decoupled from the rest because m_matT(il,il-1) is zero. 
   // Rows il,...,iu is the part we are working on (the active window).
   // Rows iu+1,...,end are already brought in triangular form.
-  int iu = m_matU.cols() - 1;
-  int iter = 0; // iteration count
+  Index iu = m_matT.cols() - 1;
+  Index iter = 0; // iteration count
   Scalar exshift = 0.0; // sum of exceptional shifts
   Scalar norm = computeNormOfT();
 
   while (iu >= 0)
   {
-    int il = findSmallSubdiagEntry(iu, norm);
+    Index il = findSmallSubdiagEntry(iu, norm);
 
     // Check for convergence
     if (il == iu) // One root found
@@ -224,7 +234,7 @@ void RealSchur<MatrixType>::compute(const MatrixType& matrix)
     }
     else if (il == iu-1) // Two roots found
     {
-      splitOffTwoRows(iu, exshift);
+      splitOffTwoRows(iu, computeU, exshift);
       iu -= 2;
       iter = 0;
     }
@@ -233,34 +243,35 @@ void RealSchur<MatrixType>::compute(const MatrixType& matrix)
       Vector3s firstHouseholderVector, shiftInfo;
       computeShift(iu, iter, exshift, shiftInfo);
       iter = iter + 1;   // (Could check iteration count here.)
-      int im;
+      Index im;
       initFrancisQRStep(il, iu, shiftInfo, im, firstHouseholderVector);
-      performFrancisQRStep(il, im, iu, firstHouseholderVector, workspace);
+      performFrancisQRStep(il, im, iu, computeU, firstHouseholderVector, workspace);
     }
   } 
 
   m_isInitialized = true;
+  m_matUisUptodate = computeU;
 }
 
 /** \internal Computes and returns vector L1 norm of T */
 template<typename MatrixType>
 inline typename MatrixType::Scalar RealSchur<MatrixType>::computeNormOfT()
 {
-  const int size = m_matU.cols();
+  const Index size = m_matT.cols();
   // FIXME to be efficient the following would requires a triangular reduxion code
   // Scalar norm = m_matT.upper().cwiseAbs().sum() 
   //               + m_matT.bottomLeftCorner(size-1,size-1).diagonal().cwiseAbs().sum();
   Scalar norm = 0.0;
-  for (int j = 0; j < size; ++j)
-    norm += m_matT.row(j).segment(std::max(j-1,0), size-std::max(j-1,0)).cwiseAbs().sum();
+  for (Index j = 0; j < size; ++j)
+    norm += m_matT.row(j).segment(std::max(j-1,Index(0)), size-std::max(j-1,Index(0))).cwiseAbs().sum();
   return norm;
 }
 
 /** \internal Look for single small sub-diagonal element and returns its index */
 template<typename MatrixType>
-inline int RealSchur<MatrixType>::findSmallSubdiagEntry(int iu, Scalar norm)
+inline typename MatrixType::Index RealSchur<MatrixType>::findSmallSubdiagEntry(Index iu, Scalar norm)
 {
-  int res = iu;
+  Index res = iu;
   while (res > 0)
   {
     Scalar s = ei_abs(m_matT.coeff(res-1,res-1)) + ei_abs(m_matT.coeff(res,res));
@@ -275,9 +286,9 @@ inline int RealSchur<MatrixType>::findSmallSubdiagEntry(int iu, Scalar norm)
 
 /** \internal Update T given that rows iu-1 and iu decouple from the rest. */
 template<typename MatrixType>
-inline void RealSchur<MatrixType>::splitOffTwoRows(int iu, Scalar exshift)
+inline void RealSchur<MatrixType>::splitOffTwoRows(Index iu, bool computeU, Scalar exshift)
 {
-  const int size = m_matU.cols();
+  const Index size = m_matT.cols();
 
   // The eigenvalues of the 2x2 matrix [a b; c d] are 
   // trace +/- sqrt(discr/4) where discr = tr^2 - 4*det, tr = a + d, det = ad - bc
@@ -298,7 +309,8 @@ inline void RealSchur<MatrixType>::splitOffTwoRows(int iu, Scalar exshift)
     m_matT.rightCols(size-iu+1).applyOnTheLeft(iu-1, iu, rot.adjoint());
     m_matT.topRows(iu+1).applyOnTheRight(iu-1, iu, rot);
     m_matT.coeffRef(iu, iu-1) = Scalar(0); 
-    m_matU.applyOnTheRight(iu-1, iu, rot);
+    if (computeU)
+      m_matU.applyOnTheRight(iu-1, iu, rot);
   }
 
   if (iu > 1) 
@@ -307,7 +319,7 @@ inline void RealSchur<MatrixType>::splitOffTwoRows(int iu, Scalar exshift)
 
 /** \internal Form shift in shiftInfo, and update exshift if an exceptional shift is performed. */
 template<typename MatrixType>
-inline void RealSchur<MatrixType>::computeShift(int iu, int iter, Scalar& exshift, Vector3s& shiftInfo)
+inline void RealSchur<MatrixType>::computeShift(Index iu, Index iter, Scalar& exshift, Vector3s& shiftInfo)
 {
   shiftInfo.coeffRef(0) = m_matT.coeff(iu,iu);
   shiftInfo.coeffRef(1) = m_matT.coeff(iu-1,iu-1);
@@ -317,7 +329,7 @@ inline void RealSchur<MatrixType>::computeShift(int iu, int iter, Scalar& exshif
   if (iter == 10)
   {
     exshift += shiftInfo.coeff(0);
-    for (int i = 0; i <= iu; ++i)
+    for (Index i = 0; i <= iu; ++i)
       m_matT.coeffRef(i,i) -= shiftInfo.coeff(0);
     Scalar s = ei_abs(m_matT.coeff(iu,iu-1)) + ei_abs(m_matT.coeff(iu-1,iu-2));
     shiftInfo.coeffRef(0) = Scalar(0.75) * s;
@@ -338,7 +350,7 @@ inline void RealSchur<MatrixType>::computeShift(int iu, int iter, Scalar& exshif
       s = s + (shiftInfo.coeff(1) - shiftInfo.coeff(0)) / Scalar(2.0);
       s = shiftInfo.coeff(0) - shiftInfo.coeff(2) / s;
       exshift += s;
-      for (int i = 0; i <= iu; ++i)
+      for (Index i = 0; i <= iu; ++i)
         m_matT.coeffRef(i,i) -= s;
       shiftInfo.setConstant(Scalar(0.964));
     }
@@ -347,7 +359,7 @@ inline void RealSchur<MatrixType>::computeShift(int iu, int iter, Scalar& exshif
 
 /** \internal Compute index im at which Francis QR step starts and the first Householder vector. */
 template<typename MatrixType>
-inline void RealSchur<MatrixType>::initFrancisQRStep(int il, int iu, const Vector3s& shiftInfo, int& im, Vector3s& firstHouseholderVector)
+inline void RealSchur<MatrixType>::initFrancisQRStep(Index il, Index iu, const Vector3s& shiftInfo, Index& im, Vector3s& firstHouseholderVector)
 {
   Vector3s& v = firstHouseholderVector; // alias to save typing
 
@@ -373,14 +385,14 @@ inline void RealSchur<MatrixType>::initFrancisQRStep(int il, int iu, const Vecto
 
 /** \internal Perform a Francis QR step involving rows il:iu and columns im:iu. */
 template<typename MatrixType>
-inline void RealSchur<MatrixType>::performFrancisQRStep(int il, int im, int iu, const Vector3s& firstHouseholderVector, Scalar* workspace)
+inline void RealSchur<MatrixType>::performFrancisQRStep(Index il, Index im, Index iu, bool computeU, const Vector3s& firstHouseholderVector, Scalar* workspace)
 {
   assert(im >= il);
   assert(im <= iu-2);
 
-  const int size = m_matU.cols();
+  const Index size = m_matT.cols();
 
-  for (int k = im; k <= iu-2; ++k)
+  for (Index k = im; k <= iu-2; ++k)
   {
     bool firstIteration = (k == im);
 
@@ -404,7 +416,8 @@ inline void RealSchur<MatrixType>::performFrancisQRStep(int il, int im, int iu, 
       // These Householder transformations form the O(n^3) part of the algorithm
       m_matT.block(k, k, 3, size-k).applyHouseholderOnTheLeft(ess, tau, workspace);
       m_matT.block(0, k, std::min(iu,k+3) + 1, 3).applyHouseholderOnTheRight(ess, tau, workspace);
-      m_matU.block(0, k, size, 3).applyHouseholderOnTheRight(ess, tau, workspace);
+      if (computeU)
+	m_matU.block(0, k, size, 3).applyHouseholderOnTheRight(ess, tau, workspace);
     }
   }
 
@@ -418,11 +431,12 @@ inline void RealSchur<MatrixType>::performFrancisQRStep(int il, int im, int iu, 
     m_matT.coeffRef(iu-1, iu-2) = beta;
     m_matT.block(iu-1, iu-1, 2, size-iu+1).applyHouseholderOnTheLeft(ess, tau, workspace);
     m_matT.block(0, iu-1, iu+1, 2).applyHouseholderOnTheRight(ess, tau, workspace);
-    m_matU.block(0, iu-1, size, 2).applyHouseholderOnTheRight(ess, tau, workspace);
+    if (computeU)
+      m_matU.block(0, iu-1, size, 2).applyHouseholderOnTheRight(ess, tau, workspace);
   }
 
   // clean up pollution due to round-off errors
-  for (int i = im+2; i <= iu; ++i)
+  for (Index i = im+2; i <= iu; ++i)
   {
     m_matT.coeffRef(i,i-2) = Scalar(0);
     if (i > im+2)

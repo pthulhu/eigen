@@ -57,16 +57,16 @@
   * this variant of the eigendecomposition the pseudo-eigendecomposition.
   *
   * Call the function compute() to compute the eigenvalues and eigenvectors of
-  * a given matrix. Alternatively, you can use the
-  * EigenSolver(const MatrixType&) constructor which computes the eigenvalues
-  * and eigenvectors at construction time. Once the eigenvalue and eigenvectors
-  * are computed, they can be retrieved with the eigenvalues() and
+  * a given matrix. Alternatively, you can use the 
+  * EigenSolver(const MatrixType&, bool) constructor which computes the
+  * eigenvalues and eigenvectors at construction time. Once the eigenvalue and
+  * eigenvectors are computed, they can be retrieved with the eigenvalues() and
   * eigenvectors() functions. The pseudoEigenvalueMatrix() and
   * pseudoEigenvectors() methods allow the construction of the
   * pseudo-eigendecomposition.
   *
-  * The documentation for EigenSolver(const MatrixType&) contains an example of
-  * the typical use of this class.
+  * The documentation for EigenSolver(const MatrixType&, bool) contains an
+  * example of the typical use of this class.
   *
   * \note The implementation is adapted from
   * <a href="http://math.nist.gov/javanumerics/jama/">JAMA</a> (public domain).
@@ -78,7 +78,9 @@ template<typename _MatrixType> class EigenSolver
 {
   public:
 
+    /** \brief Synonym for the template parameter \p _MatrixType. */
     typedef _MatrixType MatrixType;
+
     enum {
       RowsAtCompileTime = MatrixType::RowsAtCompileTime,
       ColsAtCompileTime = MatrixType::ColsAtCompileTime,
@@ -87,11 +89,12 @@ template<typename _MatrixType> class EigenSolver
       MaxColsAtCompileTime = MatrixType::MaxColsAtCompileTime
     };
 
-    /** \brief Scalar type for matrices of type \p _MatrixType. */
+    /** \brief Scalar type for matrices of type #MatrixType. */
     typedef typename MatrixType::Scalar Scalar;
     typedef typename NumTraits<Scalar>::Real RealScalar;
+    typedef typename MatrixType::Index Index;
 
-    /** \brief Complex scalar type for \p _MatrixType. 
+    /** \brief Complex scalar type for #MatrixType. 
       *
       * This is \c std::complex<Scalar> if #Scalar is real (e.g.,
       * \c float or \c double) and just \c Scalar if #Scalar is
@@ -102,36 +105,37 @@ template<typename _MatrixType> class EigenSolver
     /** \brief Type for vector of eigenvalues as returned by eigenvalues(). 
       *
       * This is a column vector with entries of type #ComplexScalar.
-      * The length of the vector is the size of \p _MatrixType.
+      * The length of the vector is the size of #MatrixType.
       */
     typedef Matrix<ComplexScalar, ColsAtCompileTime, 1, Options & ~RowMajor, MaxColsAtCompileTime, 1> EigenvalueType;
 
     /** \brief Type for matrix of eigenvectors as returned by eigenvectors(). 
       *
       * This is a square matrix with entries of type #ComplexScalar. 
-      * The size is the same as the size of \p _MatrixType.
+      * The size is the same as the size of #MatrixType.
       */
     typedef Matrix<ComplexScalar, RowsAtCompileTime, ColsAtCompileTime, Options, MaxRowsAtCompileTime, MaxColsAtCompileTime> EigenvectorsType;
 
     /** \brief Default constructor.
       *
       * The default constructor is useful in cases in which the user intends to
-      * perform decompositions via EigenSolver::compute(const MatrixType&).
+      * perform decompositions via EigenSolver::compute(const MatrixType&, bool).
       *
       * \sa compute() for an example.
       */
  EigenSolver() : m_eivec(), m_eivalues(), m_isInitialized(false), m_realSchur(), m_matT(), m_tmp() {}
 
-    /** \brief Default Constructor with memory preallocation
+    /** \brief Default constructor with memory preallocation
       *
       * Like the default constructor but with preallocation of the internal data
       * according to the specified problem \a size.
       * \sa EigenSolver()
       */
-    EigenSolver(int size)
+    EigenSolver(Index size)
       : m_eivec(size, size),
         m_eivalues(size),
         m_isInitialized(false),
+        m_eigenvectorsOk(false),
         m_realSchur(size),
         m_matT(size, size), 
         m_tmp(size)
@@ -140,6 +144,9 @@ template<typename _MatrixType> class EigenSolver
     /** \brief Constructor; computes eigendecomposition of given matrix. 
       * 
       * \param[in]  matrix  Square matrix whose eigendecomposition is to be computed.
+      * \param[in]  computeEigenvectors  If true, both the eigenvectors and the
+      *    eigenvalues are computed; if false, only the eigenvalues are
+      *    computed. 
       *
       * This constructor calls compute() to compute the eigenvalues
       * and eigenvectors.
@@ -149,23 +156,26 @@ template<typename _MatrixType> class EigenSolver
       *
       * \sa compute()
       */
-    EigenSolver(const MatrixType& matrix)
+    EigenSolver(const MatrixType& matrix, bool computeEigenvectors = true)
       : m_eivec(matrix.rows(), matrix.cols()),
         m_eivalues(matrix.cols()),
         m_isInitialized(false),
+        m_eigenvectorsOk(false),
         m_realSchur(matrix.cols()),
         m_matT(matrix.rows(), matrix.cols()), 
         m_tmp(matrix.cols())
     {
-      compute(matrix);
+      compute(matrix, computeEigenvectors);
     }
 
     /** \brief Returns the eigenvectors of given matrix. 
       *
       * \returns  %Matrix whose columns are the (possibly complex) eigenvectors.
       *
-      * \pre Either the constructor EigenSolver(const MatrixType&) or the
-      * member function compute(const MatrixType&) has been called before.
+      * \pre Either the constructor 
+      * EigenSolver(const MatrixType&,bool) or the member function
+      * compute(const MatrixType&, bool) has been called before, and
+      * \p computeEigenvectors was set to true (the default).
       *
       * Column \f$ k \f$ of the returned matrix is an eigenvector corresponding
       * to eigenvalue number \f$ k \f$ as returned by eigenvalues().  The
@@ -184,9 +194,10 @@ template<typename _MatrixType> class EigenSolver
       *
       * \returns  Const reference to matrix whose columns are the pseudo-eigenvectors.
       *
-      * \pre Either the constructor EigenSolver(const MatrixType&) or
-      * the member function compute(const MatrixType&) has been called
-      * before.
+      * \pre Either the constructor 
+      * EigenSolver(const MatrixType&,bool) or the member function
+      * compute(const MatrixType&, bool) has been called before, and
+      * \p computeEigenvectors was set to true (the default).
       *
       * The real matrix \f$ V \f$ returned by this function and the
       * block-diagonal matrix \f$ D \f$ returned by pseudoEigenvalueMatrix()
@@ -200,6 +211,7 @@ template<typename _MatrixType> class EigenSolver
     const MatrixType& pseudoEigenvectors() const
     {
       ei_assert(m_isInitialized && "EigenSolver is not initialized.");
+      ei_assert(m_eigenvectorsOk && "The eigenvectors have not been computed together with the eigenvalues.");
       return m_eivec;
     }
 
@@ -207,8 +219,9 @@ template<typename _MatrixType> class EigenSolver
       *
       * \returns  A block-diagonal matrix.
       *
-      * \pre Either the constructor EigenSolver(const MatrixType&) or the
-      * member function compute(const MatrixType&) has been called before.
+      * \pre Either the constructor 
+      * EigenSolver(const MatrixType&,bool) or the member function
+      * compute(const MatrixType&, bool) has been called before.
       *
       * The matrix \f$ D \f$ returned by this function is real and
       * block-diagonal. The blocks on the diagonal are either 1-by-1 or 2-by-2
@@ -225,8 +238,9 @@ template<typename _MatrixType> class EigenSolver
       *
       * \returns A const reference to the column vector containing the eigenvalues.
       *
-      * \pre Either the constructor EigenSolver(const MatrixType&) or the
-      * member function compute(const MatrixType&) has been called before.
+      * \pre Either the constructor 
+      * EigenSolver(const MatrixType&,bool) or the member function
+      * compute(const MatrixType&, bool) has been called before.
       *
       * The eigenvalues are repeated according to their algebraic multiplicity,
       * so there are as many eigenvalues as rows in the matrix.
@@ -246,34 +260,40 @@ template<typename _MatrixType> class EigenSolver
     /** \brief Computes eigendecomposition of given matrix. 
       * 
       * \param[in]  matrix  Square matrix whose eigendecomposition is to be computed.
+      * \param[in]  computeEigenvectors  If true, both the eigenvectors and the
+      *    eigenvalues are computed; if false, only the eigenvalues are
+      *    computed. 
       * \returns    Reference to \c *this
       *
-      * This function computes the eigenvalues and eigenvectors of \p matrix.
-      * The eigenvalues() and eigenvectors() functions can be used to retrieve
-      * the computed eigendecomposition.
+      * This function computes the eigenvalues of the real matrix \p matrix.
+      * The eigenvalues() function can be used to retrieve them.  If 
+      * \p computeEigenvectors is true, then the eigenvectors are also computed
+      * and can be retrieved by calling eigenvectors().
       *
       * The matrix is first reduced to real Schur form using the RealSchur
       * class. The Schur decomposition is then used to compute the eigenvalues
       * and eigenvectors.
       *
-      * The cost of the computation is dominated by the cost of the Schur
-      * decomposition, which is very approximately \f$ 25n^3 \f$ where 
-      * \f$ n \f$ is the size of the matrix.
+      * The cost of the computation is dominated by the cost of the
+      * Schur decomposition, which is very approximately \f$ 25n^3 \f$
+      * (where \f$ n \f$ is the size of the matrix) if \p computeEigenvectors 
+      * is true, and \f$ 10n^3 \f$ if \p computeEigenvectors is false.
       *
       * This method reuses of the allocated data in the EigenSolver object.
       *
       * Example: \include EigenSolver_compute.cpp
       * Output: \verbinclude EigenSolver_compute.out
       */
-    EigenSolver& compute(const MatrixType& matrix);
+    EigenSolver& compute(const MatrixType& matrix, bool computeEigenvectors = true);
 
   private:
-    void computeEigenvectors();
+    void doComputeEigenvectors();
 
   protected:
     MatrixType m_eivec;
     EigenvalueType m_eivalues;
     bool m_isInitialized;
+    bool m_eigenvectorsOk;
     RealSchur<MatrixType> m_realSchur;
     MatrixType m_matT;
 
@@ -285,9 +305,9 @@ template<typename MatrixType>
 MatrixType EigenSolver<MatrixType>::pseudoEigenvalueMatrix() const
 {
   ei_assert(m_isInitialized && "EigenSolver is not initialized.");
-  int n = m_eivec.cols();
+  Index n = m_eivalues.rows();
   MatrixType matD = MatrixType::Zero(n,n);
-  for (int i=0; i<n; ++i)
+  for (Index i=0; i<n; ++i)
   {
     if (ei_isMuchSmallerThan(ei_imag(m_eivalues.coeff(i)), ei_real(m_eivalues.coeff(i))))
       matD.coeffRef(i,i) = ei_real(m_eivalues.coeff(i));
@@ -305,9 +325,10 @@ template<typename MatrixType>
 typename EigenSolver<MatrixType>::EigenvectorsType EigenSolver<MatrixType>::eigenvectors() const
 {
   ei_assert(m_isInitialized && "EigenSolver is not initialized.");
-  int n = m_eivec.cols();
+  ei_assert(m_eigenvectorsOk && "The eigenvectors have not been computed together with the eigenvalues.");
+  Index n = m_eivec.cols();
   EigenvectorsType matV(n,n);
-  for (int j=0; j<n; ++j)
+  for (Index j=0; j<n; ++j)
   {
     if (ei_isMuchSmallerThan(ei_imag(m_eivalues.coeff(j)), ei_real(m_eivalues.coeff(j))))
     {
@@ -317,7 +338,7 @@ typename EigenSolver<MatrixType>::EigenvectorsType EigenSolver<MatrixType>::eige
     else
     {
       // we have a pair of complex eigen values
-      for (int i=0; i<n; ++i)
+      for (Index i=0; i<n; ++i)
       {
         matV.coeffRef(i,j)   = ComplexScalar(m_eivec.coeff(i,j),  m_eivec.coeff(i,j+1));
         matV.coeffRef(i,j+1) = ComplexScalar(m_eivec.coeff(i,j), -m_eivec.coeff(i,j+1));
@@ -331,18 +352,19 @@ typename EigenSolver<MatrixType>::EigenvectorsType EigenSolver<MatrixType>::eige
 }
 
 template<typename MatrixType>
-EigenSolver<MatrixType>& EigenSolver<MatrixType>::compute(const MatrixType& matrix)
+EigenSolver<MatrixType>& EigenSolver<MatrixType>::compute(const MatrixType& matrix, bool computeEigenvectors)
 {
   assert(matrix.cols() == matrix.rows());
 
   // Reduce to real Schur form.
-  m_realSchur.compute(matrix);
+  m_realSchur.compute(matrix, computeEigenvectors);
   m_matT = m_realSchur.matrixT();
-  m_eivec = m_realSchur.matrixU();
+  if (computeEigenvectors)
+    m_eivec = m_realSchur.matrixU();
 
   // Compute eigenvalues from matT
   m_eivalues.resize(matrix.cols());
-  int i = 0;
+  Index i = 0;
   while (i < matrix.cols()) 
   {
     if (i == matrix.cols() - 1 || m_matT.coeff(i+1, i) == Scalar(0)) 
@@ -361,9 +383,12 @@ EigenSolver<MatrixType>& EigenSolver<MatrixType>::compute(const MatrixType& matr
   }
   
   // Compute eigenvectors.
-  computeEigenvectors();
+  if (computeEigenvectors)
+    doComputeEigenvectors();
 
   m_isInitialized = true;
+  m_eigenvectorsOk = computeEigenvectors;
+
   return *this;
 }
 
@@ -388,25 +413,25 @@ std::complex<Scalar> cdiv(Scalar xr, Scalar xi, Scalar yr, Scalar yi)
 
 
 template<typename MatrixType>
-void EigenSolver<MatrixType>::computeEigenvectors()
+void EigenSolver<MatrixType>::doComputeEigenvectors()
 {
-  const int size = m_eivec.cols();
+  const Index size = m_eivec.cols();
   const Scalar eps = NumTraits<Scalar>::epsilon();
 
   // inefficient! this is already computed in RealSchur
   Scalar norm = 0.0;
-  for (int j = 0; j < size; ++j)
+  for (Index j = 0; j < size; ++j)
   {
-    norm += m_matT.row(j).segment(std::max(j-1,0), size-std::max(j-1,0)).cwiseAbs().sum();
+    norm += m_matT.row(j).segment(std::max(j-1,Index(0)), size-std::max(j-1,Index(0))).cwiseAbs().sum();
   }
   
   // Backsubstitute to find vectors of upper triangular form
   if (norm == 0.0)
   {
-      return;
+    return;
   }
 
-  for (int n = size-1; n >= 0; n--)
+  for (Index n = size-1; n >= 0; n--)
   {
     Scalar p = m_eivalues.coeff(n).real();
     Scalar q = m_eivalues.coeff(n).imag();
@@ -415,10 +440,10 @@ void EigenSolver<MatrixType>::computeEigenvectors()
     if (q == 0)
     {
       Scalar lastr=0, lastw=0;
-      int l = n;
+      Index l = n;
 
       m_matT.coeffRef(n,n) = 1.0;
-      for (int i = n-1; i >= 0; i--)
+      for (Index i = n-1; i >= 0; i--)
       {
         Scalar w = m_matT.coeff(i,i) - p;
         Scalar r = m_matT.row(i).segment(l,n-l+1).dot(m_matT.col(n).segment(l, n-l+1));
@@ -461,7 +486,7 @@ void EigenSolver<MatrixType>::computeEigenvectors()
     else if (q < 0) // Complex vector
     {
       Scalar lastra=0, lastsa=0, lastw=0;
-      int l = n-1;
+      Index l = n-1;
 
       // Last vector component imaginary so matrix is triangular
       if (ei_abs(m_matT.coeff(n,n-1)) > ei_abs(m_matT.coeff(n-1,n)))
@@ -477,7 +502,7 @@ void EigenSolver<MatrixType>::computeEigenvectors()
       }
       m_matT.coeffRef(n,n-1) = 0.0;
       m_matT.coeffRef(n,n) = 1.0;
-      for (int i = n-2; i >= 0; i--)
+      for (Index i = n-2; i >= 0; i--)
       {
         Scalar ra = m_matT.row(i).segment(l, n-l+1).dot(m_matT.col(n-1).segment(l, n-l+1));
         Scalar sa = m_matT.row(i).segment(l, n-l+1).dot(m_matT.col(n).segment(l, n-l+1));
@@ -535,7 +560,7 @@ void EigenSolver<MatrixType>::computeEigenvectors()
   }
 
   // Back transformation to get eigenvectors of original matrix
-  for (int j = size-1; j >= 0; j--)
+  for (Index j = size-1; j >= 0; j--)
   {
     m_tmp.noalias() = m_eivec.leftCols(j+1) * m_matT.col(j).segment(0, j+1);
     m_eivec.col(j) = m_tmp;

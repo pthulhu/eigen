@@ -281,14 +281,8 @@ struct ei_traits<ei_inverse_impl<MatrixType> >
 template<typename MatrixType>
 struct ei_inverse_impl : public ReturnByValue<ei_inverse_impl<MatrixType> >
 {
-  // for 2x2, it's worth giving a chance to avoid evaluating.
-  // for larger sizes, evaluating has negligible cost, limits code size,
-  // and allows for vectorized paths.
-  typedef typename ei_meta_if<
-    MatrixType::RowsAtCompileTime == 2,
-    typename ei_nested<MatrixType,2>::type,
-    typename ei_eval<MatrixType>::type
-  >::ret MatrixTypeNested;
+  typedef typename MatrixType::Index Index;
+  typedef typename ei_eval<MatrixType>::type MatrixTypeNested;
   typedef typename ei_cleantype<MatrixTypeNested>::type MatrixTypeNestedCleaned;
   const MatrixTypeNested m_matrix;
 
@@ -296,11 +290,13 @@ struct ei_inverse_impl : public ReturnByValue<ei_inverse_impl<MatrixType> >
     : m_matrix(matrix)
   {}
 
-  inline int rows() const { return m_matrix.rows(); }
-  inline int cols() const { return m_matrix.cols(); }
+  inline Index rows() const { return m_matrix.rows(); }
+  inline Index cols() const { return m_matrix.cols(); }
 
   template<typename Dest> inline void evalTo(Dest& dst) const
   {
+    // FIXME this is a naive aliasing check that could be improved. It only catches x = x.inverse();
+    ei_assert(&dst != &m_matrix && "Aliasing problem detected in inverse(), you need to do inverse().eval() here.");
     ei_compute_inverse<MatrixTypeNestedCleaned, Dest>::run(m_matrix, dst);
   }
 };

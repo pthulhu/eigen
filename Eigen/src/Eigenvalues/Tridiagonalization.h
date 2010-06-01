@@ -67,6 +67,7 @@ template<typename _MatrixType> class Tridiagonalization
 
     typedef typename MatrixType::Scalar Scalar;
     typedef typename NumTraits<Scalar>::Real RealScalar;
+    typedef typename MatrixType::Index Index;
 
     enum {
       Size = MatrixType::RowsAtCompileTime,
@@ -107,8 +108,10 @@ template<typename _MatrixType> class Tridiagonalization
       *
       * \sa compute() for an example.
       */
-    Tridiagonalization(int size = Size==Dynamic ? 2 : Size)
-      : m_matrix(size,size), m_hCoeffs(size > 1 ? size-1 : 1)
+    Tridiagonalization(Index size = Size==Dynamic ? 2 : Size)
+      : m_matrix(size,size), 
+        m_hCoeffs(size > 1 ? size-1 : 1),
+        m_isInitialized(false)
     {}
 
     /** \brief Constructor; computes tridiagonal decomposition of given matrix. 
@@ -122,9 +125,12 @@ template<typename _MatrixType> class Tridiagonalization
       * Output: \verbinclude Tridiagonalization_Tridiagonalization_MatrixType.out
       */
     Tridiagonalization(const MatrixType& matrix)
-      : m_matrix(matrix), m_hCoeffs(matrix.cols() > 1 ? matrix.cols()-1 : 1)
+      : m_matrix(matrix), 
+        m_hCoeffs(matrix.cols() > 1 ? matrix.cols()-1 : 1),
+        m_isInitialized(false)
     {
       _compute(m_matrix, m_hCoeffs);
+      m_isInitialized = true;
     }
 
     /** \brief Computes tridiagonal decomposition of given matrix. 
@@ -148,6 +154,7 @@ template<typename _MatrixType> class Tridiagonalization
       m_matrix = matrix;
       m_hCoeffs.resize(matrix.rows()-1, 1);
       _compute(m_matrix, m_hCoeffs);
+      m_isInitialized = true;
     }
 
     /** \brief Returns the Householder coefficients.
@@ -166,7 +173,11 @@ template<typename _MatrixType> class Tridiagonalization
       *
       * \sa packedMatrix(), \ref Householder_Module "Householder module"
       */
-    inline CoeffVectorType householderCoefficients() const { return m_hCoeffs; }
+    inline CoeffVectorType householderCoefficients() const 
+    { 
+      ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
+      return m_hCoeffs; 
+    }
 
     /** \brief Returns the internal representation of the decomposition 
       *
@@ -199,7 +210,11 @@ template<typename _MatrixType> class Tridiagonalization
       *
       * \sa householderCoefficients()
       */
-    inline const MatrixType& packedMatrix() const { return m_matrix; }
+    inline const MatrixType& packedMatrix() const 
+    { 
+      ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
+      return m_matrix; 
+    }
 
     /** \brief Returns the unitary matrix Q in the decomposition 
       *
@@ -218,6 +233,7 @@ template<typename _MatrixType> class Tridiagonalization
       */
     HouseholderSequenceType matrixQ() const
     {
+      ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
       return HouseholderSequenceType(m_matrix, m_hCoeffs.conjugate(), false, m_matrix.rows() - 1, 1);
     }
 
@@ -311,12 +327,14 @@ template<typename _MatrixType> class Tridiagonalization
 
     MatrixType m_matrix;
     CoeffVectorType m_hCoeffs;
+    bool m_isInitialized;
 };
 
 template<typename MatrixType>
 const typename Tridiagonalization<MatrixType>::DiagonalReturnType
 Tridiagonalization<MatrixType>::diagonal() const
 {
+  ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
   return m_matrix.diagonal();
 }
 
@@ -324,7 +342,8 @@ template<typename MatrixType>
 const typename Tridiagonalization<MatrixType>::SubDiagonalReturnType
 Tridiagonalization<MatrixType>::subDiagonal() const
 {
-  int n = m_matrix.rows();
+  ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
+  Index n = m_matrix.rows();
   return Block<MatrixType,SizeMinusOne,SizeMinusOne>(m_matrix, 1, 0, n-1,n-1).diagonal();
 }
 
@@ -334,7 +353,8 @@ Tridiagonalization<MatrixType>::matrixT() const
 {
   // FIXME should this function (and other similar ones) rather take a matrix as argument
   // and fill it ? (to avoid temporaries)
-  int n = m_matrix.rows();
+  ei_assert(m_isInitialized && "Tridiagonalization is not initialized.");
+  Index n = m_matrix.rows();
   MatrixType matT = m_matrix;
   matT.topRightCorner(n-1, n-1).diagonal() = subDiagonal().template cast<Scalar>().conjugate();
   if (n>2)
@@ -363,10 +383,10 @@ template<typename MatrixType>
 void Tridiagonalization<MatrixType>::_compute(MatrixType& matA, CoeffVectorType& hCoeffs)
 {
   assert(matA.rows()==matA.cols());
-  int n = matA.rows();
-  for (int i = 0; i<n-1; ++i)
+  Index n = matA.rows();
+  for (Index i = 0; i<n-1; ++i)
   {
-    int remainingSize = n-i-1;
+    Index remainingSize = n-i-1;
     RealScalar beta;
     Scalar h;
     matA.col(i).tail(remainingSize).makeHouseholderInPlace(h, beta);
@@ -391,7 +411,7 @@ void Tridiagonalization<MatrixType>::_compute(MatrixType& matA, CoeffVectorType&
 template<typename MatrixType>
 void Tridiagonalization<MatrixType>::decomposeInPlace(MatrixType& mat, DiagonalType& diag, SubDiagonalType& subdiag, bool extractQ)
 {
-  int n = mat.rows();
+  Index n = mat.rows();
   ei_assert(mat.cols()==n && diag.size()==n && subdiag.size()==n-1);
   if (n==3 && (!NumTraits<Scalar>::IsComplex) )
   {
