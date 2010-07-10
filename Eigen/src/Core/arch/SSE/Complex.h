@@ -38,6 +38,7 @@ template<> struct ei_packet_traits<std::complex<float> >  : ei_default_packet_tr
   typedef Packet2cf type;
   enum {
     Vectorizable = 1,
+    AlignedOnScalar = 1,
     size = 2,
 
     HasAdd    = 1,
@@ -54,13 +55,6 @@ template<> struct ei_packet_traits<std::complex<float> >  : ei_default_packet_tr
 };
 
 template<> struct ei_unpacket_traits<Packet2cf> { typedef std::complex<float> type; enum {size=2}; };
-
-template<> EIGEN_STRONG_INLINE Packet2cf ei_pset1<std::complex<float> >(const std::complex<float>&  from)
-{
-  Packet2cf res;
-  res.v = _mm_loadl_pi(res.v, (const __m64*)&from);
-  return Packet2cf(_mm_movelh_ps(res.v,res.v));
-}
 
 template<> EIGEN_STRONG_INLINE Packet2cf ei_padd<Packet2cf>(const Packet2cf& a, const Packet2cf& b) { return Packet2cf(_mm_add_ps(a.v,b.v)); }
 template<> EIGEN_STRONG_INLINE Packet2cf ei_psub<Packet2cf>(const Packet2cf& a, const Packet2cf& b) { return Packet2cf(_mm_sub_ps(a.v,b.v)); }
@@ -95,19 +89,29 @@ template<> EIGEN_STRONG_INLINE Packet2cf ei_por    <Packet2cf>(const Packet2cf& 
 template<> EIGEN_STRONG_INLINE Packet2cf ei_pxor   <Packet2cf>(const Packet2cf& a, const Packet2cf& b) { return Packet2cf(_mm_xor_ps(a.v,b.v)); }
 template<> EIGEN_STRONG_INLINE Packet2cf ei_pandnot<Packet2cf>(const Packet2cf& a, const Packet2cf& b) { return Packet2cf(_mm_andnot_ps(a.v,b.v)); }
 
-template<> EIGEN_STRONG_INLINE Packet2cf ei_pload <std::complex<float> >(const std::complex<float>* from) { EIGEN_DEBUG_ALIGNED_LOAD return Packet2cf(_mm_load_ps((const float*)from)); }
-template<> EIGEN_STRONG_INLINE Packet2cf ei_ploadu<std::complex<float> >(const std::complex<float>* from) { EIGEN_DEBUG_UNALIGNED_LOAD return Packet2cf(ei_ploadu((const float*)from)); }
+template<> EIGEN_STRONG_INLINE Packet2cf ei_pload <std::complex<float> >(const std::complex<float>* from) { EIGEN_DEBUG_ALIGNED_LOAD return Packet2cf(ei_pload(&ei_real_ref(*from))); }
+template<> EIGEN_STRONG_INLINE Packet2cf ei_ploadu<std::complex<float> >(const std::complex<float>* from) { EIGEN_DEBUG_UNALIGNED_LOAD return Packet2cf(ei_ploadu(&ei_real_ref(*from))); }
 
-template<> EIGEN_STRONG_INLINE void ei_pstore <std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_ALIGNED_STORE _mm_store_ps((float*)to, from.v); }
-template<> EIGEN_STRONG_INLINE void ei_pstoreu<std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_UNALIGNED_STORE ei_pstoreu((float*)to, from.v); }
+template<> EIGEN_STRONG_INLINE void ei_pstore <std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_ALIGNED_STORE ei_pstore(&ei_real_ref(*to), from.v); }
+template<> EIGEN_STRONG_INLINE void ei_pstoreu<std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_UNALIGNED_STORE ei_pstoreu(&ei_real_ref(*to), from.v); }
 
 template<> EIGEN_STRONG_INLINE void ei_prefetch<std::complex<float> >(const std::complex<float> *   addr) { _mm_prefetch((const char*)(addr), _MM_HINT_T0); }
 
+template<> EIGEN_STRONG_INLINE Packet2cf ei_pset1<std::complex<float> >(const std::complex<float>&  from)
+{
+  Packet2cf res;
+  res.v = _mm_loadl_pi(res.v, (const __m64*)&from);
+  return Packet2cf(_mm_movelh_ps(res.v,res.v));
+}
+
 template<> EIGEN_STRONG_INLINE std::complex<float>  ei_pfirst<Packet2cf>(const Packet2cf& a)
 {
-  std::complex<float> res;
-  _mm_storel_pi((__m64*)&res, a.v);
-  return res;
+  union {
+    float res[2];
+    double asDouble;
+  };
+  _mm_store_sd(&asDouble,_mm_castps_pd(a.v));
+  return *(std::complex<float>*)res;
 }
 
 template<> EIGEN_STRONG_INLINE Packet2cf ei_preverse(const Packet2cf& a) { return Packet2cf(_mm_castpd_ps(ei_preverse(_mm_castps_pd(a.v)))); }
@@ -194,6 +198,15 @@ template<> struct ei_conj_helper<Packet2cf, Packet2cf, true,true>
   }
 };
 
+template<> struct ei_conj_helper<Packet4f, Packet2cf, false,false>
+{
+  EIGEN_STRONG_INLINE Packet2cf pmadd(const Packet4f& x, const Packet2cf& y, const Packet2cf& c) const
+  { return ei_padd(c, pmul(x,y)); }
+
+  EIGEN_STRONG_INLINE Packet2cf pmul(const Packet4f& x, const Packet2cf& y) const
+  { return Packet2cf(ei_pmul(x, y.v)); }
+};
+
 template<> EIGEN_STRONG_INLINE Packet2cf ei_pdiv<Packet2cf>(const Packet2cf& a, const Packet2cf& b)
 {
   // TODO optimize it for SSE3 and 4
@@ -215,6 +228,7 @@ template<> struct ei_packet_traits<std::complex<double> >  : ei_default_packet_t
   typedef Packet1cd type;
   enum {
     Vectorizable = 1,
+    AlignedOnScalar = 0,
     size = 1,
 
     HasAdd    = 1,
@@ -275,6 +289,9 @@ template<> EIGEN_STRONG_INLINE void ei_prefetch<std::complex<double> >(const std
 
 template<> EIGEN_STRONG_INLINE std::complex<double>  ei_pfirst<Packet1cd>(const Packet1cd& a)
 {
+//   EIGEN_ALIGN16 double res[2];
+//   _mm_store_pd(res, a.v);
+//   return *(std::complex<double>*)res;
   EIGEN_ALIGN16 std::complex<double> res;
   ei_pstore(&res, a);
   return res;
@@ -359,6 +376,15 @@ template<> struct ei_conj_helper<Packet1cd, Packet1cd, true,true>
                                            ei_vec2d_swizzle1(b.v, 1, 0))));
     #endif
   }
+};
+
+template<> struct ei_conj_helper<Packet2d, Packet1cd, false,false>
+{
+  EIGEN_STRONG_INLINE Packet1cd pmadd(const Packet2d& x, const Packet1cd& y, const Packet1cd& c) const
+  { return ei_padd(c, pmul(x,y)); }
+
+  EIGEN_STRONG_INLINE Packet1cd pmul(const Packet2d& x, const Packet1cd& y) const
+  { return Packet1cd(ei_pmul(x, y.v)); }
 };
 
 template<> EIGEN_STRONG_INLINE Packet1cd ei_pdiv<Packet1cd>(const Packet1cd& a, const Packet1cd& b)
