@@ -29,30 +29,37 @@
 // implement and control fast level 2 and level 3 BLAS-like routines.
 
 // forward declarations
-template<typename Scalar, typename Index, int mr, int nr, bool ConjugateLhs=false, bool ConjugateRhs=false>
+template<typename LhsScalar, typename RhsScalar, typename Index, int mr, int nr, bool ConjugateLhs=false, bool ConjugateRhs=false>
 struct ei_gebp_kernel;
 
 template<typename Scalar, typename Index, int nr, int StorageOrder, bool Conjugate = false, bool PanelMode=false>
 struct ei_gemm_pack_rhs;
 
-template<typename Scalar, typename Index, int mr, int StorageOrder, bool Conjugate = false, bool PanelMode = false>
+template<typename Scalar, typename Index, int Pack1, int Pack2, int StorageOrder, bool Conjugate = false, bool PanelMode = false>
 struct ei_gemm_pack_lhs;
 
 template<
-  typename Scalar, typename Index,
-  int LhsStorageOrder, bool ConjugateLhs,
-  int RhsStorageOrder, bool ConjugateRhs,
+  typename Index,
+  typename LhsScalar, int LhsStorageOrder, bool ConjugateLhs,
+  typename RhsScalar, int RhsStorageOrder, bool ConjugateRhs,
   int ResStorageOrder>
 struct ei_general_matrix_matrix_product;
 
-template<bool ConjugateLhs, bool ConjugateRhs, typename Scalar, typename Index, typename RhsType>
-static void ei_cache_friendly_product_colmajor_times_vector(
-  Index size, const Scalar* lhs, Index lhsStride, const RhsType& rhs, Scalar* res, Scalar alpha);
+template<typename Index, typename LhsScalar, int LhsStorageOrder, bool ConjugateLhs, typename RhsScalar, bool ConjugateRhs>
+struct ei_general_matrix_vector_product;
 
-template<bool ConjugateLhs, bool ConjugateRhs, typename Scalar, typename Index>
-static void ei_cache_friendly_product_rowmajor_times_vector(
-  Index rows, Index Cols, const Scalar* lhs, Index lhsStride, const Scalar* rhs, Index rhsIncr,
-  Scalar* res, Index resIncr, Scalar alpha);
+
+template<bool Conjugate> struct ei_conj_if;
+
+template<> struct ei_conj_if<true> {
+  template<typename T>
+  inline T operator()(const T& x) { return ei_conj(x); }
+};
+
+template<> struct ei_conj_if<false> {
+  template<typename T>
+  inline const T& operator()(const T& x) { return x; }
+};
 
 template<typename Scalar> struct ei_conj_helper<Scalar,Scalar,false,false>
 {
@@ -90,16 +97,30 @@ template<typename RealScalar> struct ei_conj_helper<std::complex<RealScalar>, st
   { return Scalar(ei_real(x)*ei_real(y) - ei_imag(x)*ei_imag(y), - ei_real(x)*ei_imag(y) - ei_imag(x)*ei_real(y)); }
 };
 
-template<bool Conjugate> struct ei_conj_if;
-
-template<> struct ei_conj_if<true> {
-  template<typename T>
-  inline T operator()(const T& x) { return ei_conj(x); }
+template<typename RealScalar,bool Conj> struct ei_conj_helper<std::complex<RealScalar>, RealScalar, Conj,false>
+{
+  typedef std::complex<RealScalar> Scalar;
+  EIGEN_STRONG_INLINE Scalar pmadd(const Scalar& x, const RealScalar& y, const Scalar& c) const
+  { return ei_padd(c, pmul(x,y)); }
+  EIGEN_STRONG_INLINE Scalar pmul(const Scalar& x, const RealScalar& y) const
+  { return ei_conj_if<Conj>()(x)*y; }
 };
 
-template<> struct ei_conj_if<false> {
-  template<typename T>
-  inline const T& operator()(const T& x) { return x; }
+template<typename RealScalar,bool Conj> struct ei_conj_helper<RealScalar, std::complex<RealScalar>, false,Conj>
+{
+  typedef std::complex<RealScalar> Scalar;
+  EIGEN_STRONG_INLINE Scalar pmadd(const RealScalar& x, const Scalar& y, const Scalar& c) const
+  { return ei_padd(c, pmul(x,y)); }
+  EIGEN_STRONG_INLINE Scalar pmul(const RealScalar& x, const Scalar& y) const
+  { return x*ei_conj_if<Conj>()(y); }
+};
+
+template<typename From,typename To> struct ei_get_factor {
+  EIGEN_STRONG_INLINE static To run(const From& x) { return x; }
+};
+
+template<typename Scalar> struct ei_get_factor<Scalar,typename NumTraits<Scalar>::Real> {
+  EIGEN_STRONG_INLINE static typename NumTraits<Scalar>::Real run(const Scalar& x) { return ei_real(x); }
 };
 
 // Lightweight helper class to access matrix coefficients.
@@ -130,34 +151,6 @@ class ei_const_blas_data_mapper
     Index m_stride;
 };
 
-// Defines various constant controlling register blocking for matrix-matrix algorithms.
-template<typename Scalar>
-struct ei_product_blocking_traits
-{
-  typedef typename ei_packet_traits<Scalar>::type PacketType;
-  enum {
-    PacketSize = sizeof(PacketType)/sizeof(Scalar),
-    NumberOfRegisters = EIGEN_ARCH_DEFAULT_NUMBER_OF_REGISTERS,
-
-    // register block size along the N direction (must be either 2 or 4)
-    nr = NumberOfRegisters/4,
-
-    // register block size along the M direction (currently, this one cannot be modified)
-    mr = 2 * PacketSize
-  };
-};
-
-template<typename Real>
-struct ei_product_blocking_traits<std::complex<Real> >
-{
-  typedef std::complex<Real> Scalar;
-  typedef typename ei_packet_traits<Scalar>::type PacketType;
-  enum {
-    PacketSize = sizeof(PacketType)/sizeof(Scalar),
-    nr = 2,
-    mr = 2 * PacketSize
-  };
-};
 
 /* Helper class to analyze the factors of a Product expression.
  * In particular it allows to pop out operator-, scalar multiples,

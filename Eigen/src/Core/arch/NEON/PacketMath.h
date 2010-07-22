@@ -45,13 +45,13 @@ typedef float32x4_t Packet4f;
 typedef int32x4_t   Packet4i;
 
 #define _EIGEN_DECLARE_CONST_Packet4f(NAME,X) \
-  const Packet4f ei_p4f_##NAME = ei_pset1<float>(X)
+  const Packet4f ei_p4f_##NAME = ei_pset1<Packet4f>(X)
 
 #define _EIGEN_DECLARE_CONST_Packet4f_FROM_INT(NAME,X) \
   const Packet4f ei_p4f_##NAME = vreinterpretq_f32_u32(ei_pset1<int>(X))
 
 #define _EIGEN_DECLARE_CONST_Packet4i(NAME,X) \
-  const Packet4i ei_p4i_##NAME = ei_pset1<int>(X)
+  const Packet4i ei_p4i_##NAME = ei_pset1<Packet4i>(X)
 
 #ifndef __pld
 #define __pld(x) asm volatile ( "   pld [%[addr]]\n" :: [addr] "r" (x) : "cc" );
@@ -62,6 +62,7 @@ template<> struct ei_packet_traits<float>  : ei_default_packet_traits
   typedef Packet4f type;
   enum {
     Vectorizable = 1,
+    AlignedOnScalar = 1,
     size = 4,
    
     HasDiv  = 1,
@@ -78,6 +79,7 @@ template<> struct ei_packet_traits<int>    : ei_default_packet_traits
   typedef Packet4i type;
   enum {
     Vectorizable = 1,
+    AlignedOnScalar = 1,
     size=4
     // FIXME check the Has*
   };
@@ -86,18 +88,18 @@ template<> struct ei_packet_traits<int>    : ei_default_packet_traits
 template<> struct ei_unpacket_traits<Packet4f> { typedef float  type; enum {size=4}; };
 template<> struct ei_unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; };
 
-template<> EIGEN_STRONG_INLINE Packet4f ei_pset1<float>(const float&  from) { return vdupq_n_f32(from); }
-template<> EIGEN_STRONG_INLINE Packet4i ei_pset1<int>(const int&    from)   { return vdupq_n_s32(from); }
+template<> EIGEN_STRONG_INLINE Packet4f ei_pset1<Packet4f>(const float&  from) { return vdupq_n_f32(from); }
+template<> EIGEN_STRONG_INLINE Packet4i ei_pset1<Packet4i>(const int&    from)   { return vdupq_n_s32(from); }
 
 template<> EIGEN_STRONG_INLINE Packet4f ei_plset<float>(const float& a)
 {
   Packet4f countdown = { 3, 2, 1, 0 };
-  return vaddq_f32(ei_pset1(a), countdown);
+  return vaddq_f32(ei_pset1<Packet4f>(a), countdown);
 }
 template<> EIGEN_STRONG_INLINE Packet4i ei_plset<int>(const int& a)
 {
   Packet4i countdown = { 3, 2, 1, 0 };
-  return vaddq_s32(ei_pset1(a), countdown);
+  return vaddq_s32(ei_pset1<Packet4i>(a), countdown);
 }
 
 template<> EIGEN_STRONG_INLINE Packet4f ei_padd<Packet4f>(const Packet4f& a, const Packet4f& b) { return vaddq_f32(a,b); }
@@ -135,7 +137,7 @@ template<> EIGEN_STRONG_INLINE Packet4f ei_pdiv<Packet4f>(const Packet4f& a, con
 }
 template<> EIGEN_STRONG_INLINE Packet4i ei_pdiv<Packet4i>(const Packet4i& /*a*/, const Packet4i& /*b*/)
 { ei_assert(false && "packet integer division are not supported by NEON");
-  return ei_pset1<int>(0);
+  return ei_pset1<Packet4i>(0);
 }
 
 // for some weird raisons, it has to be overloaded for packet of integers
@@ -178,6 +180,21 @@ template<> EIGEN_STRONG_INLINE Packet4i ei_pload<int>(const int*     from) { EIG
 template<> EIGEN_STRONG_INLINE Packet4f ei_ploadu(const float* from) { EIGEN_DEBUG_UNALIGNED_LOAD return vld1q_f32(from); }
 template<> EIGEN_STRONG_INLINE Packet4i ei_ploadu(const int* from)   { EIGEN_DEBUG_UNALIGNED_LOAD return vld1q_s32(from); }
 
+template<> EIGEN_STRONG_INLINE Packet4f ei_ploaddup<Packet4f>(const float* from)
+{
+  float32x2_t lo, ho;
+  lo = vdup_n_f32(*from);
+  hi = vdup_n_f32(*from);
+  return vcombine_f32(lo, hi);
+}
+template<> EIGEN_STRONG_INLINE Packet4i ei_ploaddup<Packet4i>(const float* from)
+{
+  int32x2_t lo, ho;
+  lo = vdup_n_s32(*from);
+  hi = vdup_n_s32(*from);
+  return vcombine_s32(lo, hi);
+}
+
 template<> EIGEN_STRONG_INLINE void ei_pstore<float>(float*   to, const Packet4f& from) { EIGEN_DEBUG_ALIGNED_STORE vst1q_f32(to, from); }
 template<> EIGEN_STRONG_INLINE void ei_pstore<int>(int*       to, const Packet4i& from) { EIGEN_DEBUG_ALIGNED_STORE vst1q_s32(to, from); }
 
@@ -193,25 +210,21 @@ template<> EIGEN_STRONG_INLINE int    ei_pfirst<Packet4i>(const Packet4i& a) { i
 
 template<> EIGEN_STRONG_INLINE Packet4f ei_preverse(const Packet4f& a) {
   float32x2_t a_lo, a_hi;
-  Packet4f a_r64, a_r128;
+  Packet4f a_r64;
 
   a_r64 = vrev64q_f32(a);
   a_lo = vget_low_f32(a_r64);
   a_hi = vget_high_f32(a_r64);
-  a_r128 = vcombine_f32(a_hi, a_lo);
-
-  return a_r128;
+  return vcombine_f32(a_hi, a_lo);
 }
 template<> EIGEN_STRONG_INLINE Packet4i ei_preverse(const Packet4i& a) {
   int32x2_t a_lo, a_hi;
-  Packet4i a_r64, a_r128;
+  Packet4i a_r64;
 
   a_r64 = vrev64q_s32(a);
   a_lo = vget_low_s32(a_r64);
   a_hi = vget_high_s32(a_r64);
-  a_r128 = vcombine_s32(a_hi, a_lo);
-
-  return a_r128;
+  return vcombine_s32(a_hi, a_lo);
 }
 template<> EIGEN_STRONG_INLINE Packet4f ei_pabs(const Packet4f& a) { return vabsq_f32(a); }
 template<> EIGEN_STRONG_INLINE Packet4i ei_pabs(const Packet4i& a) { return vabsq_s32(a); }

@@ -65,23 +65,24 @@ struct ei_selfadjoint_product<Scalar, Index, MatStorageOrder, ColMajor, AAT, UpL
   {
     ei_const_blas_data_mapper<Scalar, Index, MatStorageOrder> mat(_mat,matStride);
 
-    if(AAT)
-      alpha = ei_conj(alpha);
+//     if(AAT)
+//       alpha = ei_conj(alpha);
 
-    typedef ei_product_blocking_traits<Scalar> Blocking;
+    typedef ei_gebp_traits<Scalar,Scalar> Traits;
 
     Index kc = depth; // cache block size along the K direction
     Index mc = size;  // cache block size along the M direction
     Index nc = size;  // cache block size along the N direction
     computeProductBlockingSizes<Scalar,Scalar>(kc, mc, nc);
     // !!! mc must be a multiple of nr:
-    if(mc>Blocking::nr)
-      mc = (mc/Blocking::nr)*Blocking::nr;
+    if(mc>Traits::nr)
+      mc = (mc/Traits::nr)*Traits::nr;
 
     Scalar* blockA = ei_aligned_stack_new(Scalar, kc*mc);
-    std::size_t sizeB = kc*Blocking::PacketSize*Blocking::nr + kc*size;
+    std::size_t sizeW = kc*Traits::WorkSpaceFactor;
+    std::size_t sizeB = sizeW + kc*size;
     Scalar* allocatedBlockB = ei_aligned_stack_new(Scalar, sizeB);
-    Scalar* blockB = allocatedBlockB + kc*Blocking::PacketSize*Blocking::nr;
+    Scalar* blockB = allocatedBlockB + sizeW;
 
     // note that the actual rhs is the transpose/adjoint of mat
     enum {
@@ -89,17 +90,17 @@ struct ei_selfadjoint_product<Scalar, Index, MatStorageOrder, ColMajor, AAT, UpL
       ConjRhs = NumTraits<Scalar>::IsComplex && AAT
     };
 
-    ei_gebp_kernel<Scalar, Index, Blocking::mr, Blocking::nr, ConjLhs, ConjRhs> gebp_kernel;
-    ei_gemm_pack_rhs<Scalar, Index, Blocking::nr,MatStorageOrder==RowMajor ? ColMajor : RowMajor> pack_rhs;
-    ei_gemm_pack_lhs<Scalar, Index, Blocking::mr,MatStorageOrder, false> pack_lhs;
-    ei_sybb_kernel<Scalar, Index, Blocking::mr, Blocking::nr, ConjLhs, ConjRhs, UpLo> sybb;
+    ei_gebp_kernel<Scalar, Scalar, Index, Traits::mr, Traits::nr, ConjLhs, ConjRhs> gebp_kernel;
+    ei_gemm_pack_rhs<Scalar, Index, Traits::nr,MatStorageOrder==RowMajor ? ColMajor : RowMajor> pack_rhs;
+    ei_gemm_pack_lhs<Scalar, Index, Traits::mr, Traits::LhsProgress, MatStorageOrder, false> pack_lhs;
+    ei_sybb_kernel<Scalar, Index, Traits::mr, Traits::nr, ConjLhs, ConjRhs, UpLo> sybb;
 
     for(Index k2=0; k2<depth; k2+=kc)
     {
       const Index actual_kc = std::min(k2+kc,depth)-k2;
 
       // note that the actual rhs is the transpose/adjoint of mat
-      pack_rhs(blockB, &mat(0,k2), matStride, alpha, actual_kc, size);
+      pack_rhs(blockB, &mat(0,k2), matStride, actual_kc, size);
 
       for(Index i2=0; i2<size; i2+=mc)
       {
@@ -112,15 +113,15 @@ struct ei_selfadjoint_product<Scalar, Index, MatStorageOrder, ColMajor, AAT, UpL
         //  2 - the actual_mc x actual_mc symmetric block => processed with a special kernel
         //  3 - after the diagonal => processed with gebp or skipped
         if (UpLo==Lower)
-          gebp_kernel(res+i2, resStride, blockA, blockB, actual_mc, actual_kc, std::min(size,i2),
+          gebp_kernel(res+i2, resStride, blockA, blockB, actual_mc, actual_kc, std::min(size,i2), alpha,
                       -1, -1, 0, 0, allocatedBlockB);
 
-        sybb(res+resStride*i2 + i2, resStride, blockA, blockB + actual_kc*i2, actual_mc, actual_kc, allocatedBlockB);
+        sybb(res+resStride*i2 + i2, resStride, blockA, blockB + actual_kc*i2, actual_mc, actual_kc, alpha, allocatedBlockB);
 
         if (UpLo==Upper)
         {
           Index j2 = i2+actual_mc;
-          gebp_kernel(res+resStride*j2+i2, resStride, blockA, blockB+actual_kc*j2, actual_mc, actual_kc, std::max(Index(0),size-j2),
+          gebp_kernel(res+resStride*j2+i2, resStride, blockA, blockB+actual_kc*j2, actual_mc, actual_kc, std::max(Index(0), size-j2), alpha,
                       -1, -1, 0, 0, allocatedBlockB);
         }
       }
@@ -173,9 +174,9 @@ struct ei_sybb_kernel
     PacketSize = ei_packet_traits<Scalar>::size,
     BlockSize  = EIGEN_PLAIN_ENUM_MAX(mr,nr)
   };
-  void operator()(Scalar* res, Index resStride, const Scalar* blockA, const Scalar* blockB, Index size, Index depth, Scalar* workspace)
+  void operator()(Scalar* res, Index resStride, const Scalar* blockA, const Scalar* blockB, Index size, Index depth, Scalar alpha, Scalar* workspace)
   {
-    ei_gebp_kernel<Scalar, Index, mr, nr, ConjLhs, ConjRhs> gebp_kernel;
+    ei_gebp_kernel<Scalar, Scalar, Index, mr, nr, ConjLhs, ConjRhs> gebp_kernel;
     Matrix<Scalar,BlockSize,BlockSize,ColMajor> buffer;
 
     // let's process the block per panel of actual_mc x BlockSize,
@@ -186,14 +187,15 @@ struct ei_sybb_kernel
       const Scalar* actual_b = blockB+j*depth;
 
       if(UpLo==Upper)
-        gebp_kernel(res+j*resStride, resStride, blockA, actual_b, j, depth, actualBlockSize, -1, -1, 0, 0, workspace);
+        gebp_kernel(res+j*resStride, resStride, blockA, actual_b, j, depth, actualBlockSize, alpha,
+                    -1, -1, 0, 0, workspace);
 
       // selfadjoint micro block
       {
         Index i = j;
         buffer.setZero();
         // 1 - apply the kernel on the temporary buffer
-        gebp_kernel(buffer.data(), BlockSize, blockA+depth*i, actual_b, actualBlockSize, depth, actualBlockSize,
+        gebp_kernel(buffer.data(), BlockSize, blockA+depth*i, actual_b, actualBlockSize, depth, actualBlockSize, alpha,
                     -1, -1, 0, 0, workspace);
         // 2 - triangular accumulation
         for(Index j1=0; j1<actualBlockSize; ++j1)
@@ -208,7 +210,7 @@ struct ei_sybb_kernel
       if(UpLo==Lower)
       {
         Index i = j+actualBlockSize;
-        gebp_kernel(res+j*resStride+i, resStride, blockA+depth*i, actual_b, size-i, depth, actualBlockSize,
+        gebp_kernel(res+j*resStride+i, resStride, blockA+depth*i, actual_b, size-i, depth, actualBlockSize, alpha,
                     -1, -1, 0, 0, workspace);
       }
     }

@@ -256,6 +256,12 @@ struct ei_assign_impl;
 *** Default traversal ***
 ************************/
 
+template<typename Derived1, typename Derived2, int Unrolling>
+struct ei_assign_impl<Derived1, Derived2, InvalidTraversal, Unrolling>
+{
+  inline static void run(Derived1 &, const Derived2 &) { }
+};
+
 template<typename Derived1, typename Derived2>
 struct ei_assign_impl<Derived1, Derived2, DefaultTraversal, NoUnrolling>
 {
@@ -397,7 +403,12 @@ struct ei_assign_impl<Derived1, Derived2, LinearVectorizedTraversal, NoUnrolling
   EIGEN_STRONG_INLINE static void run(Derived1 &dst, const Derived2 &src)
   {
     const Index size = dst.size();
-    const Index packetSize = ei_packet_traits<typename Derived1::Scalar>::size;
+    typedef ei_packet_traits<typename Derived1::Scalar> PacketTraits;
+    enum {
+      packetSize = PacketTraits::size,
+      dstAlignment = PacketTraits::AlignedOnScalar ? Aligned : int(ei_assign_traits<Derived1,Derived2>::DstIsAligned) ,
+      srcAlignment = ei_assign_traits<Derived1,Derived2>::JointAlignment
+    };
     const Index alignedStart = ei_assign_traits<Derived1,Derived2>::DstIsAligned ? 0
                              : ei_first_aligned(&dst.coeffRef(0), size);
     const Index alignedEnd = alignedStart + ((size-alignedStart)/packetSize)*packetSize;
@@ -406,7 +417,7 @@ struct ei_assign_impl<Derived1, Derived2, LinearVectorizedTraversal, NoUnrolling
 
     for(Index index = alignedStart; index < alignedEnd; index += packetSize)
     {
-      dst.template copyPacket<Derived2, Aligned, ei_assign_traits<Derived1,Derived2>::JointAlignment>(index, src);
+      dst.template copyPacket<Derived2, dstAlignment, srcAlignment>(index, src);
     }
 
     ei_unaligned_assign_impl<>::run(src,dst,alignedEnd,size);
@@ -438,12 +449,18 @@ struct ei_assign_impl<Derived1, Derived2, SliceVectorizedTraversal, NoUnrolling>
   typedef typename Derived1::Index Index;
   inline static void run(Derived1 &dst, const Derived2 &src)
   {
-    const Index packetSize = ei_packet_traits<typename Derived1::Scalar>::size;
+    typedef ei_packet_traits<typename Derived1::Scalar> PacketTraits;
+    enum {
+      packetSize = PacketTraits::size,
+      alignable = PacketTraits::AlignedOnScalar,
+      dstAlignment = alignable ? Aligned : int(ei_assign_traits<Derived1,Derived2>::DstIsAligned) ,
+      srcAlignment = ei_assign_traits<Derived1,Derived2>::JointAlignment
+    };
     const Index packetAlignedMask = packetSize - 1;
     const Index innerSize = dst.innerSize();
     const Index outerSize = dst.outerSize();
-    const Index alignedStep = (packetSize - dst.outerStride() % packetSize) & packetAlignedMask;
-    Index alignedStart = ei_assign_traits<Derived1,Derived2>::DstIsAligned ? 0
+    const Index alignedStep = alignable ? (packetSize - dst.outerStride() % packetSize) & packetAlignedMask : 0;
+    Index alignedStart = ((!alignable) || ei_assign_traits<Derived1,Derived2>::DstIsAligned) ? 0
                        : ei_first_aligned(&dst.coeffRef(0,0), innerSize);
 
     for(Index outer = 0; outer < outerSize; ++outer)
@@ -475,14 +492,21 @@ template<typename OtherDerived>
 EIGEN_STRONG_INLINE Derived& DenseBase<Derived>
   ::lazyAssign(const DenseBase<OtherDerived>& other)
 {
+  enum{
+    SameType = ei_is_same_type<typename Derived::Scalar,typename OtherDerived::Scalar>::ret
+  };
+  
   EIGEN_STATIC_ASSERT_SAME_MATRIX_SIZE(Derived,OtherDerived)
-  EIGEN_STATIC_ASSERT((ei_is_same_type<typename Derived::Scalar, typename OtherDerived::Scalar>::ret),
-    YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
+  EIGEN_STATIC_ASSERT(SameType,YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
+
+  
+  
 #ifdef EIGEN_DEBUG_ASSIGN
   ei_assign_traits<Derived, OtherDerived>::debug();
 #endif
   ei_assert(rows() == other.rows() && cols() == other.cols());
-  ei_assign_impl<Derived, OtherDerived>::run(derived(),other.derived());
+  ei_assign_impl<Derived, OtherDerived, int(SameType) ? int(ei_assign_traits<Derived, OtherDerived>::Traversal)
+                                                      : int(InvalidTraversal)>::run(derived(),other.derived());
 #ifndef EIGEN_NO_DEBUG
   checkTransposeAliasing(other.derived());
 #endif

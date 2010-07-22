@@ -147,6 +147,12 @@
 #define EIGEN_ALWAYS_INLINE_ATTRIB
 #endif
 
+#if EIGEN_GNUC_AT_LEAST(4,0)
+#define EIGEN_FLATTEN_ATTRIB __attribute__((flatten))
+#else
+#define EIGEN_FLATTEN_ATTRIB
+#endif
+
 // EIGEN_FORCE_INLINE means "inline as much as possible"
 #if (defined _MSC_VER) || (defined __intel_compiler)
 #define EIGEN_STRONG_INLINE __forceinline
@@ -353,10 +359,8 @@
 #define EIGEN_CWISE_PRODUCT_RETURN_TYPE(LHS,RHS) \
     CwiseBinaryOp< \
       ei_scalar_product_op< \
-        typename ei_scalar_product_traits< \
           typename ei_traits<LHS>::Scalar, \
           typename ei_traits<RHS>::Scalar \
-        >::ReturnType \
       >, \
       LHS, \
       RHS \
