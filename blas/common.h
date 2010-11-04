@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2009 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2009-2010 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // Eigen is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -56,22 +56,40 @@ extern "C"
 #define NUNIT   0
 #define UNIT    1
 
+#define INVALID 0xff
+
 #define OP(X)   (   ((X)=='N' || (X)=='n') ? NOTR   \
                   : ((X)=='T' || (X)=='t') ? TR     \
                   : ((X)=='C' || (X)=='c') ? ADJ    \
-                  : 0xff)
+                  : INVALID)
 
 #define SIDE(X) (   ((X)=='L' || (X)=='l') ? LEFT   \
                   : ((X)=='R' || (X)=='r') ? RIGHT  \
-                  : 0xff)
+                  : INVALID)
 
 #define UPLO(X) (   ((X)=='U' || (X)=='u') ? UP     \
                   : ((X)=='L' || (X)=='l') ? LO     \
-                  : 0xff)
+                  : INVALID)
 
 #define DIAG(X) (   ((X)=='N' || (X)=='N') ? NUNIT  \
                   : ((X)=='U' || (X)=='u') ? UNIT   \
-                  : 0xff)
+                  : INVALID)
+
+
+inline bool check_op(const char* op)
+{
+  return OP(*op)!=0xff;
+}
+
+inline bool check_side(const char* side)
+{
+  return SIDE(*side)!=0xff;
+}
+
+inline bool check_uplo(const char* uplo)
+{
+  return UPLO(*uplo)!=0xff;
+}
 
 #include <Eigen/Core>
 #include <Eigen/Jacobi>
