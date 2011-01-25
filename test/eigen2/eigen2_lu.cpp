@@ -83,8 +83,10 @@ template<typename MatrixType> void lu_non_invertible()
   m2 = MatrixType::Random(cols,cols2);
   lu.solve(m3, &m2);
   VERIFY_IS_APPROX(m3, m1*m2);
+  /* solve now always returns true
   m3 = MatrixType::Random(rows,cols2);
   VERIFY(!lu.solve(m3, &m2));
+  */
 }
 
 template<typename MatrixType> void lu_invertible()
@@ -123,19 +125,13 @@ template<typename MatrixType> void lu_invertible()
 void test_eigen2_lu()
 {
   for(int i = 0; i < g_repeat; i++) {
-    CALL_SUBTEST( lu_non_invertible<MatrixXf>() );
-    CALL_SUBTEST( lu_non_invertible<MatrixXd>() );
-    CALL_SUBTEST( lu_non_invertible<MatrixXcf>() );
-    CALL_SUBTEST( lu_non_invertible<MatrixXcd>() );
-    CALL_SUBTEST( lu_invertible<MatrixXf>() );
-    CALL_SUBTEST( lu_invertible<MatrixXd>() );
-    CALL_SUBTEST( lu_invertible<MatrixXcf>() );
-    CALL_SUBTEST( lu_invertible<MatrixXcd>() );
+    CALL_SUBTEST_1( lu_non_invertible<MatrixXf>() );
+    CALL_SUBTEST_2( lu_non_invertible<MatrixXd>() );
+    CALL_SUBTEST_3( lu_non_invertible<MatrixXcf>() );
+    CALL_SUBTEST_4( lu_non_invertible<MatrixXcd>() );
+    CALL_SUBTEST_1( lu_invertible<MatrixXf>() );
+    CALL_SUBTEST_2( lu_invertible<MatrixXd>() );
+    CALL_SUBTEST_3( lu_invertible<MatrixXcf>() );
+    CALL_SUBTEST_4( lu_invertible<MatrixXcd>() );
   }
-
-  MatrixXf m = MatrixXf::Zero(10,10);
-  VectorXf b = VectorXf::Zero(10);
-  VectorXf x = VectorXf::Random(10);
-  VERIFY(m.lu().solve(b,&x));
-  VERIFY(x.isZero());
 }
