@@ -13,12 +13,7 @@
 
 #include "StemFunction.h"
 
-namespace Eigen { 
-
-#if defined(_MSC_VER) || defined(__FreeBSD__)
-  template <typename Scalar> Scalar log2(Scalar v) { using std::log; return log(v)/log(Scalar(2)); }
-#endif
-
+namespace Eigen {
 
 /** \ingroup MatrixFunctions_Module
   * \brief Class for computing the matrix exponential.
@@ -288,16 +283,16 @@ EIGEN_STRONG_INLINE void MatrixExponential<MatrixType>::pade17(const MatrixType 
 template <typename MatrixType>
 void MatrixExponential<MatrixType>::computeUV(float)
 {
-  using std::max;
+  using std::frexp;
   using std::pow;
-  using std::ceil;
   if (m_l1norm < 4.258730016922831e-001) {
     pade3(m_M);
   } else if (m_l1norm < 1.880152677804762e+000) {
     pade5(m_M);
   } else {
     const float maxnorm = 3.925724783138660f;
-    m_squarings = (max)(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    frexp(m_l1norm / maxnorm, &m_squarings);
+    if (m_squarings < 0) m_squarings = 0;
     MatrixType A = m_M / pow(Scalar(2), m_squarings);
     pade7(A);
   }
@@ -306,9 +301,8 @@ void MatrixExponential<MatrixType>::computeUV(float)
 template <typename MatrixType>
 void MatrixExponential<MatrixType>::computeUV(double)
 {
-  using std::max;
+  using std::frexp;
   using std::pow;
-  using std::ceil;
   if (m_l1norm < 1.495585217958292e-002) {
     pade3(m_M);
   } else if (m_l1norm < 2.539398330063230e-001) {
@@ -319,7 +313,8 @@ void MatrixExponential<MatrixType>::computeUV(double)
     pade9(m_M);
   } else {
     const double maxnorm = 5.371920351148152;
-    m_squarings = (max)(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    frexp(m_l1norm / maxnorm, &m_squarings);
+    if (m_squarings < 0) m_squarings = 0;
     MatrixType A = m_M / pow(Scalar(2), m_squarings);
     pade13(A);
   }
@@ -328,9 +323,8 @@ void MatrixExponential<MatrixType>::computeUV(double)
 template <typename MatrixType>
 void MatrixExponential<MatrixType>::computeUV(long double)
 {
-  using std::max;
+  using std::frexp;
   using std::pow;
-  using std::ceil;
 #if   LDBL_MANT_DIG == 53   // double precision
   computeUV(double());
 #elif LDBL_MANT_DIG <= 64   // extended precision
@@ -344,7 +338,8 @@ void MatrixExponential<MatrixType>::computeUV(long double)
     pade9(m_M);
   } else {
     const long double maxnorm = 4.0246098906697353063L;
-    m_squarings = (max)(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    frexp(m_l1norm / maxnorm, &m_squarings);
+    if (m_squarings < 0) m_squarings = 0;
     MatrixType A = m_M / pow(Scalar(2), m_squarings);
     pade13(A);
   }
@@ -361,7 +356,8 @@ void MatrixExponential<MatrixType>::computeUV(long double)
     pade13(m_M);
   } else {
     const long double maxnorm = 3.2579440895405400856599663723517L;
-    m_squarings = (max)(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    frexp(m_l1norm / maxnorm, &m_squarings);
+    if (m_squarings < 0) m_squarings = 0;
     MatrixType A = m_M / pow(Scalar(2), m_squarings);
     pade17(A);
   }
@@ -378,7 +374,8 @@ void MatrixExponential<MatrixType>::computeUV(long double)
     pade13(m_M);
   } else {
     const long double maxnorm = 2.884233277829519311757165057717815L;
-    m_squarings = (max)(0, (int)ceil(log2(m_l1norm / maxnorm)));
+    frexp(m_l1norm / maxnorm, &m_squarings);
+    if (m_squarings < 0) m_squarings = 0;
     MatrixType A = m_M / pow(Scalar(2), m_squarings);
     pade17(A);
   }
