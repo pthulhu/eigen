@@ -4,24 +4,9 @@
 // Copyright (C) 2008-2011 Gael Guennebaud <gael.guennebaud@inria.fr>
 // Copyright (C) 2008 Daniel Gomez Ferro <dgomezferro@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "sparse.h"
 
@@ -208,6 +193,12 @@ template<typename SparseMatrixType> void sparse_basic(const SparseMatrixType& re
     // sparse cwise* dense
     VERIFY_IS_APPROX(m3.cwiseProduct(refM4), refM3.cwiseProduct(refM4));
 //     VERIFY_IS_APPROX(m3.cwise()/refM4, refM3.cwise()/refM4);
+
+    // test aliasing
+    VERIFY_IS_APPROX((m1 = -m1), (refM1 = -refM1));
+    VERIFY_IS_APPROX((m1 = m1.transpose()), (refM1 = refM1.transpose().eval()));
+    VERIFY_IS_APPROX((m1 = -m1.transpose()), (refM1 = -refM1.transpose().eval()));
+    VERIFY_IS_APPROX((m1 += -m1), (refM1 += -refM1));
   }
 
   // test transpose
@@ -393,6 +384,41 @@ template<typename SparseMatrixType> void sparse_basic(const SparseMatrixType& re
     SparseMatrixType m2(rows, rows);
     initSparse<Scalar>(density, refMat2, m2);
     VERIFY_IS_APPROX(m2.diagonal(), refMat2.diagonal().eval());
+  }
+  
+  // test conservative resize
+  {
+      std::vector< std::pair<int,int> > inc;
+      inc.push_back(std::pair<int,int>(-3,-2));
+      inc.push_back(std::pair<int,int>(0,0));
+      inc.push_back(std::pair<int,int>(3,2));
+      inc.push_back(std::pair<int,int>(3,0));
+      inc.push_back(std::pair<int,int>(0,3));
+      
+      for(size_t i = 0; i< inc.size(); i++) {
+        int incRows = inc[i].first;
+        int incCols = inc[i].second;
+        SparseMatrixType m1(rows, cols);
+        DenseMatrix refMat1 = DenseMatrix::Zero(rows, cols);
+        initSparse<Scalar>(density, refMat1, m1);
+        
+        m1.conservativeResize(rows+incRows, cols+incCols);
+        refMat1.conservativeResize(rows+incRows, cols+incCols);
+        if (incRows > 0) refMat1.bottomRows(incRows).setZero();
+        if (incCols > 0) refMat1.rightCols(incCols).setZero();
+        
+        VERIFY_IS_APPROX(m1, refMat1);
+        
+        // Insert new values
+        if (incRows > 0) 
+          m1.insert(refMat1.rows()-1, 0) = refMat1(refMat1.rows()-1, 0) = 1;
+        if (incCols > 0) 
+          m1.insert(0, refMat1.cols()-1) = refMat1(0, refMat1.cols()-1) = 1;
+          
+        VERIFY_IS_APPROX(m1, refMat1);
+          
+          
+      }
   }
 }
 

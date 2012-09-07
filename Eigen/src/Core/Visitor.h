@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_VISITOR_H
 #define EIGEN_VISITOR_H
@@ -187,12 +172,12 @@ struct functor_traits<max_coeff_visitor<Scalar> > {
 template<typename Derived>
 template<typename IndexType>
 typename internal::traits<Derived>::Scalar
-DenseBase<Derived>::minCoeff(IndexType* row, IndexType* col) const
+DenseBase<Derived>::minCoeff(IndexType* rowId, IndexType* colId) const
 {
   internal::min_coeff_visitor<Derived> minVisitor;
   this->visit(minVisitor);
-  *row = minVisitor.row;
-  if (col) *col = minVisitor.col;
+  *rowId = minVisitor.row;
+  if (colId) *colId = minVisitor.col;
   return minVisitor.res;
 }
 
@@ -221,12 +206,12 @@ DenseBase<Derived>::minCoeff(IndexType* index) const
 template<typename Derived>
 template<typename IndexType>
 typename internal::traits<Derived>::Scalar
-DenseBase<Derived>::maxCoeff(IndexType* row, IndexType* col) const
+DenseBase<Derived>::maxCoeff(IndexType* rowPtr, IndexType* colPtr) const
 {
   internal::max_coeff_visitor<Derived> maxVisitor;
   this->visit(maxVisitor);
-  *row = maxVisitor.row;
-  if (col) *col = maxVisitor.col;
+  *rowPtr = maxVisitor.row;
+  if (colPtr) *colPtr = maxVisitor.col;
   return maxVisitor.res;
 }
 

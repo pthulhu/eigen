@@ -164,7 +164,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 
   option(EIGEN_TEST_NEON "Enable/Disable Neon in tests/examples" OFF)
   if(EIGEN_TEST_NEON)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=softfp -mfpu=neon -mcpu=cortex-a8")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -mcpu=cortex-a8")
     message(STATUS "Enabling NEON in tests/examples")
   endif()
 
@@ -338,12 +338,9 @@ if(EIGEN_BUILD_BTL)
   add_subdirectory(bench/btl EXCLUDE_FROM_ALL)
 endif(EIGEN_BUILD_BTL)
 
-if(TEST_REAL_CASES)
-  if(NOT WIN32)
-    add_subdirectory(bench/spbench EXCLUDE_FROM_ALL)
-    set(ENV(EIGEN_MATRIX_DIR) ${TEST_REAL_CASES})
-  endif(NOT WIN32)
-endif(TEST_REAL_CASES)
+if(NOT WIN32)
+  add_subdirectory(bench/spbench EXCLUDE_FROM_ALL)
+endif(NOT WIN32)
 
 ei_testing_print_summary()
 

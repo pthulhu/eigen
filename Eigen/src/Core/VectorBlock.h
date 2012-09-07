@@ -4,24 +4,9 @@
 // Copyright (C) 2008-2010 Gael Guennebaud <gael.guennebaud@inria.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_VECTORBLOCK_H
 #define EIGEN_VECTORBLOCK_H
@@ -123,19 +108,19 @@ template<typename VectorType, int Size> class VectorBlock
   */
 template<typename Derived>
 inline typename DenseBase<Derived>::SegmentReturnType
-DenseBase<Derived>::segment(Index start, Index size)
+DenseBase<Derived>::segment(Index start, Index vecSize)
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return SegmentReturnType(derived(), start, size);
+  return SegmentReturnType(derived(), start, vecSize);
 }
 
 /** This is the const version of segment(Index,Index).*/
 template<typename Derived>
 inline typename DenseBase<Derived>::ConstSegmentReturnType
-DenseBase<Derived>::segment(Index start, Index size) const
+DenseBase<Derived>::segment(Index start, Index vecSize) const
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return ConstSegmentReturnType(derived(), start, size);
+  return ConstSegmentReturnType(derived(), start, vecSize);
 }
 
 /** \returns a dynamic-size expression of the first coefficients of *this.
@@ -155,19 +140,19 @@ DenseBase<Derived>::segment(Index start, Index size) const
   */
 template<typename Derived>
 inline typename DenseBase<Derived>::SegmentReturnType
-DenseBase<Derived>::head(Index size)
+DenseBase<Derived>::head(Index vecsize)
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return SegmentReturnType(derived(), 0, size);
+  return SegmentReturnType(derived(), 0, vecsize);
 }
 
 /** This is the const version of head(Index).*/
 template<typename Derived>
 inline typename DenseBase<Derived>::ConstSegmentReturnType
-DenseBase<Derived>::head(Index size) const
+DenseBase<Derived>::head(Index vecSize) const
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return ConstSegmentReturnType(derived(), 0, size);
+  return ConstSegmentReturnType(derived(), 0, vecSize);
 }
 
 /** \returns a dynamic-size expression of the last coefficients of *this.
@@ -187,19 +172,19 @@ DenseBase<Derived>::head(Index size) const
   */
 template<typename Derived>
 inline typename DenseBase<Derived>::SegmentReturnType
-DenseBase<Derived>::tail(Index size)
+DenseBase<Derived>::tail(Index vecSize)
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return SegmentReturnType(derived(), this->size() - size, size);
+  return SegmentReturnType(derived(), this->size() - vecSize, vecSize);
 }
 
 /** This is the const version of tail(Index).*/
 template<typename Derived>
 inline typename DenseBase<Derived>::ConstSegmentReturnType
-DenseBase<Derived>::tail(Index size) const
+DenseBase<Derived>::tail(Index vecSize) const
 {
   EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived)
-  return ConstSegmentReturnType(derived(), this->size() - size, size);
+  return ConstSegmentReturnType(derived(), this->size() - vecSize, vecSize);
 }
 
 /** \returns a fixed-size expression of a segment (i.e. a vector block) in \c *this

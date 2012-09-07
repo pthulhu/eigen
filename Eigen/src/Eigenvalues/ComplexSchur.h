@@ -3,26 +3,11 @@
 //
 // Copyright (C) 2009 Claire Maurice
 // Copyright (C) 2009 Gael Guennebaud <gael.guennebaud@inria.fr>
-// Copyright (C) 2010 Jitse Niesen <jitse@maths.leeds.ac.uk>
+// Copyright (C) 2010,2012 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_COMPLEX_SCHUR_H
 #define EIGEN_COMPLEX_SCHUR_H
@@ -111,7 +96,8 @@ template<typename _MatrixType> class ComplexSchur
         m_matU(size,size),
         m_hess(size),
         m_isInitialized(false),
-        m_matUisUptodate(false)
+        m_matUisUptodate(false),
+        m_maxIters(-1)
     {}
 
     /** \brief Constructor; computes Schur decomposition of given matrix. 
@@ -124,11 +110,12 @@ template<typename _MatrixType> class ComplexSchur
       * \sa matrixT() and matrixU() for examples.
       */
     ComplexSchur(const MatrixType& matrix, bool computeU = true)
-            : m_matT(matrix.rows(),matrix.cols()),
-              m_matU(matrix.rows(),matrix.cols()),
-              m_hess(matrix.rows()),
-              m_isInitialized(false),
-              m_matUisUptodate(false)
+      : m_matT(matrix.rows(),matrix.cols()),
+        m_matU(matrix.rows(),matrix.cols()),
+        m_hess(matrix.rows()),
+        m_isInitialized(false),
+        m_matUisUptodate(false),
+        m_maxIters(-1)
     {
       compute(matrix, computeU);
     }
@@ -181,6 +168,7 @@ template<typename _MatrixType> class ComplexSchur
       * 
       * \param[in]  matrix  Square matrix whose Schur decomposition is to be computed.
       * \param[in]  computeU  If true, both T and U are computed; if false, only T is computed.
+
       * \returns    Reference to \c *this
       *
       * The Schur decomposition is computed by first reducing the
@@ -195,6 +183,8 @@ template<typename _MatrixType> class ComplexSchur
       *
       * Example: \include ComplexSchur_compute.cpp
       * Output: \verbinclude ComplexSchur_compute.out
+      *
+      * \sa compute(const MatrixType&, bool, Index)
       */
     ComplexSchur& compute(const MatrixType& matrix, bool computeU = true);
 
@@ -204,15 +194,33 @@ template<typename _MatrixType> class ComplexSchur
       */
     ComputationInfo info() const
     {
-      eigen_assert(m_isInitialized && "RealSchur is not initialized.");
+      eigen_assert(m_isInitialized && "ComplexSchur is not initialized.");
       return m_info;
     }
 
-    /** \brief Maximum number of iterations.
+    /** \brief Sets the maximum number of iterations allowed. 
       *
-      * Maximum number of iterations allowed for an eigenvalue to converge. 
+      * If not specified by the user, the maximum number of iterations is m_maxIterationsPerRow times the size
+      * of the matrix.
       */
-    static const int m_maxIterations = 30;
+    ComplexSchur& setMaxIterations(Index maxIters)
+    {
+      m_maxIters = maxIters;
+      return *this;
+    }
+
+    /** \brief Returns the maximum number of iterations. */
+    Index getMaxIterations()
+    {
+      return m_maxIters;
+    }
+
+    /** \brief Maximum number of iterations per row.
+      *
+      * If not otherwise specified, the maximum number of iterations is this number times the size of the
+      * matrix. It is currently set to 30.
+      */
+    static const int m_maxIterationsPerRow = 30;
 
   protected:
     ComplexMatrixType m_matT, m_matU;
@@ -220,6 +228,7 @@ template<typename _MatrixType> class ComplexSchur
     ComputationInfo m_info;
     bool m_isInitialized;
     bool m_matUisUptodate;
+    Index m_maxIters;
 
   private:  
     bool subdiagonalEntryIsNeglegible(Index i);
@@ -344,6 +353,10 @@ struct complex_schur_reduce_to_hessenberg<MatrixType, false>
 template<typename MatrixType>
 void ComplexSchur<MatrixType>::reduceToTriangularForm(bool computeU)
 {  
+  Index maxIters = m_maxIters;
+  if (maxIters == -1)
+    maxIters = m_maxIterationsPerRow * m_matT.rows();
+
   // The matrix m_matT is divided in three parts. 
   // Rows 0,...,il-1 are decoupled from the rest because m_matT(il,il-1) is zero. 
   // Rows il,...,iu is the part we are working on (the active submatrix).
@@ -351,6 +364,7 @@ void ComplexSchur<MatrixType>::reduceToTriangularForm(bool computeU)
   Index iu = m_matT.cols() - 1;
   Index il;
   Index iter = 0; // number of iterations we are working on the (iu,iu) element
+  Index totalIter = 0; // number of iterations for whole matrix
 
   while(true)
   {
@@ -365,9 +379,10 @@ void ComplexSchur<MatrixType>::reduceToTriangularForm(bool computeU)
     // if iu is zero then we are done; the whole matrix is triangularized
     if(iu==0) break;
 
-    // if we spent too many iterations on the current element, we give up
+    // if we spent too many iterations, we give up
     iter++;
-    if(iter > m_maxIterations) break;
+    totalIter++;
+    if(totalIter > maxIters) break;
 
     // find il, the top row of the active submatrix
     il = iu-1;
@@ -397,7 +412,7 @@ void ComplexSchur<MatrixType>::reduceToTriangularForm(bool computeU)
     }
   }
 
-  if(iter <= m_maxIterations) 
+  if(totalIter <= maxIters)
     m_info = Success;
   else
     m_info = NoConvergence;

@@ -2,26 +2,11 @@
 // for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@inria.fr>
-// Copyright (C) 2010 Jitse Niesen <jitse@maths.leeds.ac.uk>
+// Copyright (C) 2010,2012 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_EIGENSOLVER_H
 #define EIGEN_EIGENSOLVER_H
@@ -296,6 +281,19 @@ template<typename _MatrixType> class EigenSolver
       return m_realSchur.info();
     }
 
+    /** \brief Sets the maximum number of iterations allowed. */
+    EigenSolver& setMaxIterations(Index maxIters)
+    {
+      m_realSchur.setMaxIterations(maxIters);
+      return *this;
+    }
+
+    /** \brief Returns the maximum number of iterations. */
+    Index getMaxIterations()
+    {
+      return m_realSchur.getMaxIterations();
+    }
+
   private:
     void doComputeEigenvectors();
 
@@ -363,12 +361,14 @@ typename EigenSolver<MatrixType>::EigenvectorsType EigenSolver<MatrixType>::eige
 }
 
 template<typename MatrixType>
-EigenSolver<MatrixType>& EigenSolver<MatrixType>::compute(const MatrixType& matrix, bool computeEigenvectors)
+EigenSolver<MatrixType>& 
+EigenSolver<MatrixType>::compute(const MatrixType& matrix, bool computeEigenvectors)
 {
   assert(matrix.cols() == matrix.rows());
 
   // Reduce to real Schur form.
   m_realSchur.compute(matrix, computeEigenvectors);
+
   if (m_realSchur.info() == Success)
   {
     m_matT = m_realSchur.matrixT();
@@ -547,7 +547,7 @@ void EigenSolver<MatrixType>::doComputeEigenvectors()
             if ((vr == 0.0) && (vi == 0.0))
               vr = eps * norm * (internal::abs(w) + internal::abs(q) + internal::abs(x) + internal::abs(y) + internal::abs(lastw));
 
-	    std::complex<Scalar> cc = cdiv(x*lastra-lastw*ra+q*sa,x*lastsa-lastw*sa-q*ra,vr,vi);
+            std::complex<Scalar> cc = cdiv(x*lastra-lastw*ra+q*sa,x*lastsa-lastw*sa-q*ra,vr,vi);
             m_matT.coeffRef(i,n-1) = internal::real(cc);
             m_matT.coeffRef(i,n) = internal::imag(cc);
             if (internal::abs(x) > (internal::abs(lastw) + internal::abs(q)))

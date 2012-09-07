@@ -2,26 +2,11 @@
 // for linear algebra.
 //
 // Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@inria.fr>
-// Copyright (C) 2010 Jitse Niesen <jitse@maths.leeds.ac.uk>
+// Copyright (C) 2010,2012 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_REAL_SCHUR_H
 #define EIGEN_REAL_SCHUR_H
@@ -101,7 +86,8 @@ template<typename _MatrixType> class RealSchur
               m_workspaceVector(size),
               m_hess(size),
               m_isInitialized(false),
-              m_matUisUptodate(false)
+              m_matUisUptodate(false),
+              m_maxIters(-1)
     { }
 
     /** \brief Constructor; computes real Schur decomposition of given matrix. 
@@ -120,7 +106,8 @@ template<typename _MatrixType> class RealSchur
               m_workspaceVector(matrix.rows()),
               m_hess(matrix.rows()),
               m_isInitialized(false),
-              m_matUisUptodate(false)
+              m_matUisUptodate(false),
+              m_maxIters(-1)
     {
       compute(matrix, computeU);
     }
@@ -175,6 +162,8 @@ template<typename _MatrixType> class RealSchur
       *
       * Example: \include RealSchur_compute.cpp
       * Output: \verbinclude RealSchur_compute.out
+      *
+      * \sa compute(const MatrixType&, bool, Index)
       */
     RealSchur& compute(const MatrixType& matrix, bool computeU = true);
 
@@ -188,11 +177,29 @@ template<typename _MatrixType> class RealSchur
       return m_info;
     }
 
-    /** \brief Maximum number of iterations.
+    /** \brief Sets the maximum number of iterations allowed. 
       *
-      * Maximum number of iterations allowed for an eigenvalue to converge. 
+      * If not specified by the user, the maximum number of iterations is m_maxIterationsPerRow times the size
+      * of the matrix.
       */
-    static const int m_maxIterations = 40;
+    RealSchur& setMaxIterations(Index maxIters)
+    {
+      m_maxIters = maxIters;
+      return *this;
+    }
+
+    /** \brief Returns the maximum number of iterations. */
+    Index getMaxIterations()
+    {
+      return m_maxIters;
+    }
+
+    /** \brief Maximum number of iterations per row.
+      *
+      * If not otherwise specified, the maximum number of iterations is this number times the size of the
+      * matrix. It is currently set to 40.
+      */
+    static const int m_maxIterationsPerRow = 40;
 
   private:
     
@@ -203,6 +210,7 @@ template<typename _MatrixType> class RealSchur
     ComputationInfo m_info;
     bool m_isInitialized;
     bool m_matUisUptodate;
+    Index m_maxIters;
 
     typedef Matrix<Scalar,3,1> Vector3s;
 
@@ -219,6 +227,9 @@ template<typename MatrixType>
 RealSchur<MatrixType>& RealSchur<MatrixType>::compute(const MatrixType& matrix, bool computeU)
 {
   assert(matrix.cols() == matrix.rows());
+  Index maxIters = m_maxIters;
+  if (maxIters == -1)
+    maxIters = m_maxIterationsPerRow * matrix.rows();
 
   // Step 1. Reduce to Hessenberg form
   m_hess.compute(matrix);
@@ -235,43 +246,47 @@ RealSchur<MatrixType>& RealSchur<MatrixType>::compute(const MatrixType& matrix, 
   // Rows il,...,iu is the part we are working on (the active window).
   // Rows iu+1,...,end are already brought in triangular form.
   Index iu = m_matT.cols() - 1;
-  Index iter = 0; // iteration count
-  Scalar exshift(0); // sum of exceptional shifts
+  Index iter = 0;      // iteration count for current eigenvalue
+  Index totalIter = 0; // iteration count for whole matrix
+  Scalar exshift(0);   // sum of exceptional shifts
   Scalar norm = computeNormOfT();
 
-  while (iu >= 0)
+  if(norm!=0)
   {
-    Index il = findSmallSubdiagEntry(iu, norm);
+    while (iu >= 0)
+    {
+      Index il = findSmallSubdiagEntry(iu, norm);
 
-    // Check for convergence
-    if (il == iu) // One root found
-    {
-      m_matT.coeffRef(iu,iu) = m_matT.coeff(iu,iu) + exshift;
-      if (iu > 0) 
-        m_matT.coeffRef(iu, iu-1) = Scalar(0);
-      iu--;
-      iter = 0;
+      // Check for convergence
+      if (il == iu) // One root found
+      {
+        m_matT.coeffRef(iu,iu) = m_matT.coeff(iu,iu) + exshift;
+        if (iu > 0)
+          m_matT.coeffRef(iu, iu-1) = Scalar(0);
+        iu--;
+        iter = 0;
+      }
+      else if (il == iu-1) // Two roots found
+      {
+        splitOffTwoRows(iu, computeU, exshift);
+        iu -= 2;
+        iter = 0;
+      }
+      else // No convergence yet
+      {
+        // The firstHouseholderVector vector has to be initialized to something to get rid of a silly GCC warning (-O1 -Wall -DNDEBUG )
+        Vector3s firstHouseholderVector(0,0,0), shiftInfo;
+        computeShift(iu, iter, exshift, shiftInfo);
+        iter = iter + 1;
+        totalIter = totalIter + 1;
+        if (totalIter > maxIters) break;
+        Index im;
+        initFrancisQRStep(il, iu, shiftInfo, im, firstHouseholderVector);
+        performFrancisQRStep(il, im, iu, computeU, firstHouseholderVector, workspace);
+      }
     }
-    else if (il == iu-1) // Two roots found
-    {
-      splitOffTwoRows(iu, computeU, exshift);
-      iu -= 2;
-      iter = 0;
-    }
-    else // No convergence yet
-    {
-      // The firstHouseholderVector vector has to be initialized to something to get rid of a silly GCC warning (-O1 -Wall -DNDEBUG )
-      Vector3s firstHouseholderVector(0,0,0), shiftInfo;
-      computeShift(iu, iter, exshift, shiftInfo);
-      iter = iter + 1; 
-      if (iter > m_maxIterations) break;
-      Index im;
-      initFrancisQRStep(il, iu, shiftInfo, im, firstHouseholderVector);
-      performFrancisQRStep(il, im, iu, computeU, firstHouseholderVector, workspace);
-    }
-  } 
-
-  if(iter <= m_maxIterations) 
+  }
+  if(totalIter <= maxIters)
     m_info = Success;
   else
     m_info = NoConvergence;
@@ -291,7 +306,7 @@ inline typename MatrixType::Scalar RealSchur<MatrixType>::computeNormOfT()
   //               + m_matT.bottomLeftCorner(size-1,size-1).diagonal().cwiseAbs().sum();
   Scalar norm(0);
   for (Index j = 0; j < size; ++j)
-    norm += m_matT.row(j).segment((std::max)(j-1,Index(0)), size-(std::max)(j-1,Index(0))).cwiseAbs().sum();
+    norm += m_matT.col(j).segment(0, (std::min)(size,j+2)).cwiseAbs().sum();
   return norm;
 }
 

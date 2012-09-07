@@ -4,24 +4,9 @@
 // Copyright (C) 2008-2009 Gael Guennebaud <gael.guennebaud@inria.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_CWISE_BINARY_OP_H
 #define EIGEN_CWISE_BINARY_OP_H
@@ -137,13 +122,13 @@ class CwiseBinaryOp : internal::no_assignment_operator,
     typedef typename internal::remove_reference<LhsNested>::type _LhsNested;
     typedef typename internal::remove_reference<RhsNested>::type _RhsNested;
 
-    EIGEN_STRONG_INLINE CwiseBinaryOp(const Lhs& lhs, const Rhs& rhs, const BinaryOp& func = BinaryOp())
-      : m_lhs(lhs), m_rhs(rhs), m_functor(func)
+    EIGEN_STRONG_INLINE CwiseBinaryOp(const Lhs& aLhs, const Rhs& aRhs, const BinaryOp& func = BinaryOp())
+      : m_lhs(aLhs), m_rhs(aRhs), m_functor(func)
     {
       EIGEN_CHECK_BINARY_COMPATIBILIY(BinaryOp,typename Lhs::Scalar,typename Rhs::Scalar);
       // require the sizes to match
       EIGEN_STATIC_ASSERT_SAME_MATRIX_SIZE(Lhs, Rhs)
-      eigen_assert(lhs.rows() == rhs.rows() && lhs.cols() == rhs.cols());
+      eigen_assert(aLhs.rows() == aRhs.rows() && aLhs.cols() == aRhs.cols());
     }
 
     EIGEN_STRONG_INLINE Index rows() const {
@@ -184,17 +169,17 @@ class CwiseBinaryOpImpl<BinaryOp, Lhs, Rhs, Dense>
     typedef typename internal::dense_xpr_base<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >::type Base;
     EIGEN_DENSE_PUBLIC_INTERFACE( Derived )
 
-    EIGEN_STRONG_INLINE const Scalar coeff(Index row, Index col) const
+    EIGEN_STRONG_INLINE const Scalar coeff(Index rowId, Index colId) const
     {
-      return derived().functor()(derived().lhs().coeff(row, col),
-                                 derived().rhs().coeff(row, col));
+      return derived().functor()(derived().lhs().coeff(rowId, colId),
+                                 derived().rhs().coeff(rowId, colId));
     }
 
     template<int LoadMode>
-    EIGEN_STRONG_INLINE PacketScalar packet(Index row, Index col) const
+    EIGEN_STRONG_INLINE PacketScalar packet(Index rowId, Index colId) const
     {
-      return derived().functor().packetOp(derived().lhs().template packet<LoadMode>(row, col),
-                                          derived().rhs().template packet<LoadMode>(row, col));
+      return derived().functor().packetOp(derived().lhs().template packet<LoadMode>(rowId, colId),
+                                          derived().rhs().template packet<LoadMode>(rowId, colId));
     }
 
     EIGEN_STRONG_INLINE const Scalar coeff(Index index) const

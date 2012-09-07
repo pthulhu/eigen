@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2011 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_MATRIX_SQUARE_ROOT
 #define EIGEN_MATRIX_SQUARE_ROOT
@@ -75,17 +60,17 @@ class MatrixSquareRootQuasiTriangular
     void computeOffDiagonalPartOfSqrt(MatrixType& sqrtT, const MatrixType& T);
     void compute2x2diagonalBlock(MatrixType& sqrtT, const MatrixType& T, typename MatrixType::Index i);
     void compute1x1offDiagonalBlock(MatrixType& sqrtT, const MatrixType& T, 
-  				  typename MatrixType::Index i, typename MatrixType::Index j);
+				  typename MatrixType::Index i, typename MatrixType::Index j);
     void compute1x2offDiagonalBlock(MatrixType& sqrtT, const MatrixType& T, 
-  				  typename MatrixType::Index i, typename MatrixType::Index j);
+				  typename MatrixType::Index i, typename MatrixType::Index j);
     void compute2x1offDiagonalBlock(MatrixType& sqrtT, const MatrixType& T, 
-  				  typename MatrixType::Index i, typename MatrixType::Index j);
+				  typename MatrixType::Index i, typename MatrixType::Index j);
     void compute2x2offDiagonalBlock(MatrixType& sqrtT, const MatrixType& T, 
-  				  typename MatrixType::Index i, typename MatrixType::Index j);
+				  typename MatrixType::Index i, typename MatrixType::Index j);
   
     template <typename SmallMatrixType>
     static void solveAuxiliaryEquation(SmallMatrixType& X, const SmallMatrixType& A, 
-  				     const SmallMatrixType& B, const SmallMatrixType& C);
+				     const SmallMatrixType& B, const SmallMatrixType& C);
   
     const MatrixType& m_A;
 };

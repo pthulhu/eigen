@@ -4,24 +4,9 @@
 // Copyright (C) 2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2009 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_JACOBI_H
 #define EIGEN_JACOBI_H
@@ -222,7 +207,6 @@ void JacobiRotation<Scalar>::makeGivens(const Scalar& p, const Scalar& q, Scalar
 template<typename Scalar>
 void JacobiRotation<Scalar>::makeGivens(const Scalar& p, const Scalar& q, Scalar* r, internal::false_type)
 {
-
   if(q==Scalar(0))
   {
     m_c = p<Scalar(0) ? Scalar(-1) : Scalar(1);
@@ -318,6 +302,11 @@ void /*EIGEN_DONT_INLINE*/ apply_rotation_in_the_plane(VectorX& _x, VectorY& _y,
 
   Scalar* EIGEN_RESTRICT x = &_x.coeffRef(0);
   Scalar* EIGEN_RESTRICT y = &_y.coeffRef(0);
+  
+  OtherScalar c = j.c();
+  OtherScalar s = j.s();
+  if (c==OtherScalar(1) && s==OtherScalar(0))
+    return;
 
   /*** dynamic-size vectorized paths ***/
 
@@ -331,16 +320,16 @@ void /*EIGEN_DONT_INLINE*/ apply_rotation_in_the_plane(VectorX& _x, VectorY& _y,
     Index alignedStart = internal::first_aligned(y, size);
     Index alignedEnd = alignedStart + ((size-alignedStart)/PacketSize)*PacketSize;
 
-    const Packet pc = pset1<Packet>(j.c());
-    const Packet ps = pset1<Packet>(j.s());
+    const Packet pc = pset1<Packet>(c);
+    const Packet ps = pset1<Packet>(s);
     conj_helper<Packet,Packet,NumTraits<Scalar>::IsComplex,false> pcj;
 
     for(Index i=0; i<alignedStart; ++i)
     {
       Scalar xi = x[i];
       Scalar yi = y[i];
-      x[i] =  j.c() * xi + conj(j.s()) * yi;
-      y[i] = -j.s() * xi + conj(j.c()) * yi;
+      x[i] =  c * xi + conj(s) * yi;
+      y[i] = -s * xi + conj(c) * yi;
     }
 
     Scalar* EIGEN_RESTRICT px = x + alignedStart;
@@ -387,8 +376,8 @@ void /*EIGEN_DONT_INLINE*/ apply_rotation_in_the_plane(VectorX& _x, VectorY& _y,
     {
       Scalar xi = x[i];
       Scalar yi = y[i];
-      x[i] =  j.c() * xi + conj(j.s()) * yi;
-      y[i] = -j.s() * xi + conj(j.c()) * yi;
+      x[i] =  c * xi + conj(s) * yi;
+      y[i] = -s * xi + conj(c) * yi;
     }
   }
 
@@ -397,8 +386,8 @@ void /*EIGEN_DONT_INLINE*/ apply_rotation_in_the_plane(VectorX& _x, VectorY& _y,
           (VectorX::Flags & VectorY::Flags & PacketAccessBit) &&
           (VectorX::Flags & VectorY::Flags & AlignedBit))
   {
-    const Packet pc = pset1<Packet>(j.c());
-    const Packet ps = pset1<Packet>(j.s());
+    const Packet pc = pset1<Packet>(c);
+    const Packet ps = pset1<Packet>(s);
     conj_helper<Packet,Packet,NumTraits<Scalar>::IsComplex,false> pcj;
     Scalar* EIGEN_RESTRICT px = x;
     Scalar* EIGEN_RESTRICT py = y;
@@ -420,8 +409,8 @@ void /*EIGEN_DONT_INLINE*/ apply_rotation_in_the_plane(VectorX& _x, VectorY& _y,
     {
       Scalar xi = *x;
       Scalar yi = *y;
-      *x =  j.c() * xi + conj(j.s()) * yi;
-      *y = -j.s() * xi + conj(j.c()) * yi;
+      *x =  c * xi + conj(s) * yi;
+      *y = -s * xi + conj(c) * yi;
       x += incrx;
       y += incry;
     }

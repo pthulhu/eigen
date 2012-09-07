@@ -4,24 +4,9 @@
 // Copyright (C) 2007-2010 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2008-2010 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_DENSEBASE_H
 #define EIGEN_DENSEBASE_H
@@ -219,21 +204,21 @@ template<typename Derived> class DenseBase
       * Matrix::resize() and Array::resize(). The present method only asserts that the new size equals the old size, and does
       * nothing else.
       */
-    void resize(Index size)
+    void resize(Index newSize)
     {
-      EIGEN_ONLY_USED_FOR_DEBUG(size);
-      eigen_assert(size == this->size()
+      EIGEN_ONLY_USED_FOR_DEBUG(newSize);
+      eigen_assert(newSize == this->size()
                 && "DenseBase::resize() does not actually allow to resize.");
     }
     /** Only plain matrices/arrays, not expressions, may be resized; therefore the only useful resize methods are
       * Matrix::resize() and Array::resize(). The present method only asserts that the new size equals the old size, and does
       * nothing else.
       */
-    void resize(Index rows, Index cols)
+    void resize(Index nbRows, Index nbCols)
     {
-      EIGEN_ONLY_USED_FOR_DEBUG(rows);
-      EIGEN_ONLY_USED_FOR_DEBUG(cols);
-      eigen_assert(rows == this->rows() && cols == this->cols()
+      EIGEN_ONLY_USED_FOR_DEBUG(nbRows);
+      EIGEN_ONLY_USED_FOR_DEBUG(nbCols);
+      eigen_assert(nbRows == this->rows() && nbCols == this->cols()
                 && "DenseBase::resize() does not actually allow to resize.");
     }
 
@@ -363,17 +348,17 @@ template<typename Derived> class DenseBase
 
     template<typename OtherDerived>
     bool isApprox(const DenseBase<OtherDerived>& other,
-                  RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+                  const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     bool isMuchSmallerThan(const RealScalar& other,
-                           RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+                           const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     template<typename OtherDerived>
     bool isMuchSmallerThan(const DenseBase<OtherDerived>& other,
-                           RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+                           const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
 
-    bool isApproxToConstant(const Scalar& value, RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isConstant(const Scalar& value, RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isZero(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isOnes(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isApproxToConstant(const Scalar& value, const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isConstant(const Scalar& value, const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isZero(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isOnes(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
 
     inline Derived& operator*=(const Scalar& other);
     inline Derived& operator/=(const Scalar& other);

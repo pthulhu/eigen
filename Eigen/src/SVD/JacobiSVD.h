@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2009-2010 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_JACOBISVD_H
 #define EIGEN_JACOBISVD_H
@@ -724,16 +709,18 @@ void JacobiSVD<MatrixType, QRPreconditioner>::allocate(Index rows, Index cols, u
   }
   m_diagSize = (std::min)(m_rows, m_cols);
   m_singularValues.resize(m_diagSize);
-  m_matrixU.resize(m_rows, m_computeFullU ? m_rows
-                          : m_computeThinU ? m_diagSize
-                          : 0);
-  m_matrixV.resize(m_cols, m_computeFullV ? m_cols
-                          : m_computeThinV ? m_diagSize
-                          : 0);
+  if(RowsAtCompileTime==Dynamic)
+    m_matrixU.resize(m_rows, m_computeFullU ? m_rows
+                            : m_computeThinU ? m_diagSize
+                            : 0);
+  if(ColsAtCompileTime==Dynamic)
+    m_matrixV.resize(m_cols, m_computeFullV ? m_cols
+                            : m_computeThinV ? m_diagSize
+                            : 0);
   m_workMatrix.resize(m_diagSize, m_diagSize);
   
-  m_qr_precond_morecols.allocate(*this);
-  m_qr_precond_morerows.allocate(*this);
+  if(m_cols>m_rows) m_qr_precond_morecols.allocate(*this);
+  if(m_rows>m_cols) m_qr_precond_morerows.allocate(*this);
 }
 
 template<typename MatrixType, int QRPreconditioner>

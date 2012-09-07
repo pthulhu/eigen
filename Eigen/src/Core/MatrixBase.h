@@ -4,24 +4,9 @@
 // Copyright (C) 2006-2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 // Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_MATRIXBASE_H
 #define EIGEN_MATRIXBASE_H
@@ -239,11 +224,11 @@ template<typename Derived> class MatrixBase
     // Note: The "MatrixBase::" prefixes are added to help MSVC9 to match these declarations with the later implementations.
     // On the other hand they confuse MSVC8...
     #if (defined _MSC_VER) && (_MSC_VER >= 1500) // 2008 or later
-    typename MatrixBase::template DiagonalIndexReturnType<Dynamic>::Type diagonal(Index index);
-    typename MatrixBase::template ConstDiagonalIndexReturnType<Dynamic>::Type diagonal(Index index) const;
+    typename MatrixBase::template DiagonalIndexReturnType<DynamicIndex>::Type diagonal(Index index);
+    typename MatrixBase::template ConstDiagonalIndexReturnType<DynamicIndex>::Type diagonal(Index index) const;
     #else
-    typename DiagonalIndexReturnType<Dynamic>::Type diagonal(Index index);
-    typename ConstDiagonalIndexReturnType<Dynamic>::Type diagonal(Index index) const;
+    typename DiagonalIndexReturnType<DynamicIndex>::Type diagonal(Index index);
+    typename ConstDiagonalIndexReturnType<DynamicIndex>::Type diagonal(Index index) const;
     #endif
 
     #ifdef EIGEN2_SUPPORT
@@ -270,7 +255,7 @@ template<typename Derived> class MatrixBase
     template<unsigned int UpLo> typename ConstSelfAdjointViewReturnType<UpLo>::Type selfadjointView() const;
 
     const SparseView<Derived> sparseView(const Scalar& m_reference = Scalar(0),
-                                         typename NumTraits<Scalar>::Real m_epsilon = NumTraits<Scalar>::dummy_precision()) const;
+                                         const typename NumTraits<Scalar>::Real& m_epsilon = NumTraits<Scalar>::dummy_precision()) const;
     static const IdentityReturnType Identity();
     static const IdentityReturnType Identity(Index rows, Index cols);
     static const BasisReturnType Unit(Index size, Index i);
@@ -286,16 +271,16 @@ template<typename Derived> class MatrixBase
     Derived& setIdentity();
     Derived& setIdentity(Index rows, Index cols);
 
-    bool isIdentity(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isDiagonal(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isIdentity(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isDiagonal(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
 
-    bool isUpperTriangular(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isLowerTriangular(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isUpperTriangular(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isLowerTriangular(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
 
     template<typename OtherDerived>
     bool isOrthogonal(const MatrixBase<OtherDerived>& other,
-                      RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
-    bool isUnitary(RealScalar prec = NumTraits<Scalar>::dummy_precision()) const;
+                      const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
+    bool isUnitary(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
 
     /** \returns true if each coefficients of \c *this and \a other are all exactly equal.
       * \warning When using floating point scalar values you probably should rather use a
@@ -469,6 +454,7 @@ template<typename Derived> class MatrixBase
     const MatrixFunctionReturnValue<Derived> sin() const;
     const MatrixSquareRootReturnValue<Derived> sqrt() const;
     const MatrixLogarithmReturnValue<Derived> log() const;
+    const MatrixPowerReturnValue<Derived> pow(RealScalar p) const;
 
 #ifdef EIGEN2_SUPPORT
     template<typename ProductDerived, typename Lhs, typename Rhs>

@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2011 Gael Guennebaud <g.gael@free.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "sparse.h"
 #include <Eigen/SparseCore>
@@ -72,6 +57,16 @@ void check_sparse_solving(Solver& solver, const typename Solver::MatrixType& A, 
   VERIFY(oldb.isApprox(b) && "sparse solver testing: the rhs should not be modified!");
 
   VERIFY(x.isApprox(refX,test_precision<Scalar>()));
+  
+  // test Block as the result and rhs:
+  {
+    DenseRhs x(db.rows(), db.cols());
+    DenseRhs b(db), oldb(db);
+    x.setZero();
+    x.block(0,0,x.rows(),x.cols()) = solver.solve(b.block(0,0,b.rows(),b.cols()));
+    VERIFY(oldb.isApprox(b) && "sparse solver testing: the rhs should not be modified!");
+    VERIFY(x.isApprox(refX,test_precision<Scalar>()));
+  }
 }
 
 template<typename Solver, typename Rhs>
@@ -190,7 +185,7 @@ template<typename Solver> void check_sparse_spd_solving(Solver& solver)
   SpMat B(size,rhsCols);
   DenseVector b = DenseVector::Random(size);
   DenseMatrix dB(size,rhsCols);
-  initSparse<Scalar>(density, dB, B);
+  initSparse<Scalar>(density, dB, B, ForceNonZeroDiag);
   
   for (int i = 0; i < g_repeat; i++) {
     check_sparse_solving(solver, A,     b,  dA, b);
