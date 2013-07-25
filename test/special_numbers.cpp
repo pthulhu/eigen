@@ -11,13 +11,12 @@
 
 template<typename Scalar> void special_numbers()
 {
-  typedef typename NumTraits<Scalar>::Real RealScalar;
   typedef Matrix<Scalar, Dynamic,Dynamic> MatType;
   int rows = internal::random<int>(1,300);
   int cols = internal::random<int>(1,300);
   
-  Scalar nan = Scalar(0)/Scalar(0);
-  Scalar inf = Scalar(1)/Scalar(0);
+  Scalar nan = std::numeric_limits<Scalar>::quiet_NaN();
+  Scalar inf = std::numeric_limits<Scalar>::infinity();
   Scalar s1 = internal::random<Scalar>();
   
   MatType m1    = MatType::Random(rows,cols),
@@ -34,7 +33,7 @@ template<typename Scalar> void special_numbers()
   mboth = mnan + minf;
   
   VERIFY(!m1.hasNaN());
-  VERIFY(m1.isFinite());
+  VERIFY(m1.allFinite());
   
   VERIFY(mnan.hasNaN());
   VERIFY((s1*mnan).hasNaN());
@@ -43,11 +42,11 @@ template<typename Scalar> void special_numbers()
   VERIFY(mboth.hasNaN());
   VERIFY(mboth.array().hasNaN());
   
-  VERIFY(!mnan.isFinite());
-  VERIFY(!minf.isFinite());
-  VERIFY(!(minf-mboth).isFinite());
-  VERIFY(!mboth.isFinite());
-  VERIFY(!mboth.array().isFinite());
+  VERIFY(!mnan.allFinite());
+  VERIFY(!minf.allFinite());
+  VERIFY(!(minf-mboth).allFinite());
+  VERIFY(!mboth.allFinite());
+  VERIFY(!mboth.array().allFinite());
 }
 
 void test_special_numbers()

@@ -162,9 +162,6 @@ template<typename Derived> class MatrixBase
 #ifndef EIGEN_PARSED_BY_DOXYGEN
     template<typename ProductDerived, typename Lhs, typename Rhs>
     Derived& lazyAssign(const ProductBase<ProductDerived, Lhs,Rhs>& other);
-
-    template<typename MatrixPower, typename Lhs, typename Rhs>
-    Derived& lazyAssign(const MatrixPowerProduct<MatrixPower, Lhs,Rhs>& other);
 #endif // not EIGEN_PARSED_BY_DOXYGEN
 
     template<typename OtherDerived>
@@ -215,8 +212,8 @@ template<typename Derived> class MatrixBase
 
     typedef Diagonal<Derived> DiagonalReturnType;
     DiagonalReturnType diagonal();
-    typedef const Diagonal<const Derived> ConstDiagonalReturnType;
-    const ConstDiagonalReturnType diagonal() const;
+	typedef typename internal::add_const<Diagonal<const Derived> >::type ConstDiagonalReturnType;
+    ConstDiagonalReturnType diagonal() const;
 
     template<int Index> struct DiagonalIndexReturnType { typedef Diagonal<Derived,Index> Type; };
     template<int Index> struct ConstDiagonalIndexReturnType { typedef const Diagonal<const Derived,Index> Type; };
@@ -458,6 +455,7 @@ template<typename Derived> class MatrixBase
     const MatrixSquareRootReturnValue<Derived> sqrt() const;
     const MatrixLogarithmReturnValue<Derived> log() const;
     const MatrixPowerReturnValue<Derived> pow(const RealScalar& p) const;
+    const MatrixComplexPowerReturnValue<Derived> pow(const std::complex<RealScalar>& p) const;
 
 #ifdef EIGEN2_SUPPORT
     template<typename ProductDerived, typename Lhs, typename Rhs>

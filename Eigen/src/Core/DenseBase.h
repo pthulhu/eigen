@@ -13,6 +13,16 @@
 
 namespace Eigen {
 
+namespace internal {
+  
+// The index type defined by EIGEN_DEFAULT_DENSE_INDEX_TYPE must be a signed type.
+// This dummy function simply aims at checking that at compile time.
+static inline void check_DenseIndex_is_signed() {
+  EIGEN_STATIC_ASSERT(NumTraits<DenseIndex>::IsSigned,THE_INDEX_TYPE_MUST_BE_A_SIGNED_TYPE); 
+}
+
+} // end namespace internal
+  
 /** \class DenseBase
   * \ingroup Core_Module
   *
@@ -271,7 +281,7 @@ template<typename Derived> class DenseBase
     CommaInitializer<Derived> operator<< (const DenseBase<OtherDerived>& other);
 
     Eigen::Transpose<Derived> transpose();
-    typedef const Transpose<const Derived> ConstTransposeReturnType;
+	typedef typename internal::add_const<Transpose<const Derived> >::type ConstTransposeReturnType;
     ConstTransposeReturnType transpose() const;
     void transposeInPlace();
 #ifndef EIGEN_NO_DEBUG
@@ -338,7 +348,7 @@ template<typename Derived> class DenseBase
     bool isOnes(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     
     inline bool hasNaN() const;
-    inline bool isFinite() const;
+    inline bool allFinite() const;
 
     inline Derived& operator*=(const Scalar& other);
     inline Derived& operator/=(const Scalar& other);
