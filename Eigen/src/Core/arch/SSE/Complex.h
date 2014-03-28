@@ -22,6 +22,9 @@ struct Packet2cf
   __m128  v;
 };
 
+// Use the packet_traits defined in AVX/PacketMath.h instead if we're going
+// to leverage AVX instructions.
+#ifndef EIGEN_VECTORIZE_AVX
 template<> struct packet_traits<std::complex<float> >  : default_packet_traits
 {
   typedef Packet2cf type;
@@ -42,6 +45,7 @@ template<> struct packet_traits<std::complex<float> >  : default_packet_traits
     HasSetLinear = 0
   };
 };
+#endif
 
 template<> struct unpacket_traits<Packet2cf> { typedef std::complex<float> type; enum {size=2}; };
 
@@ -106,6 +110,24 @@ template<> EIGEN_STRONG_INLINE Packet2cf ploaddup<Packet2cf>(const std::complex<
 
 template<> EIGEN_STRONG_INLINE void pstore <std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_ALIGNED_STORE pstore(&numext::real_ref(*to), from.v); }
 template<> EIGEN_STRONG_INLINE void pstoreu<std::complex<float> >(std::complex<float> *   to, const Packet2cf& from) { EIGEN_DEBUG_UNALIGNED_STORE pstoreu(&numext::real_ref(*to), from.v); }
+
+
+template<> EIGEN_DEVICE_FUNC inline Packet2cf pgather<std::complex<float>, Packet2cf>(const std::complex<float>* from, int stride)
+{
+  return Packet2cf(_mm_set_ps(std::imag(from[1*stride]), std::real(from[1*stride]),
+			      std::imag(from[0*stride]), std::real(from[0*stride])));
+}
+
+template<> EIGEN_DEVICE_FUNC inline void pscatter<std::complex<float>, Packet2cf>(std::complex<float>* to, const Packet2cf& from, int stride)
+{
+  /*  for (int i = 0; i < 2; i+=2) {
+    to[stride*i] = std::complex<float>(from.v[i], from.v[i+1]);
+    }*/
+  to[stride*0] = std::complex<float>(_mm_cvtss_f32(_mm_shuffle_ps(from.v, from.v, 0)),
+				     _mm_cvtss_f32(_mm_shuffle_ps(from.v, from.v, 1)));
+  to[stride*1] = std::complex<float>(_mm_cvtss_f32(_mm_shuffle_ps(from.v, from.v, 2)),
+				     _mm_cvtss_f32(_mm_shuffle_ps(from.v, from.v, 3)));
+}
 
 template<> EIGEN_STRONG_INLINE void prefetch<std::complex<float> >(const std::complex<float> *   addr) { _mm_prefetch((const char*)(addr), _MM_HINT_T0); }
 
@@ -248,6 +270,9 @@ struct Packet1cd
   __m128d  v;
 };
 
+// Use the packet_traits defined in AVX/PacketMath.h instead if we're going
+// to leverage AVX instructions.
+#ifndef EIGEN_VECTORIZE_AVX
 template<> struct packet_traits<std::complex<double> >  : default_packet_traits
 {
   typedef Packet1cd type;
@@ -268,6 +293,7 @@ template<> struct packet_traits<std::complex<double> >  : default_packet_traits
     HasSetLinear = 0
   };
 };
+#endif
 
 template<> struct unpacket_traits<Packet1cd> { typedef std::complex<double> type; enum {size=1}; };
 
@@ -433,6 +459,16 @@ template<> EIGEN_STRONG_INLINE Packet1cd pdiv<Packet1cd>(const Packet1cd& a, con
 EIGEN_STRONG_INLINE Packet1cd pcplxflip/*<Packet1cd>*/(const Packet1cd& x)
 {
   return Packet1cd(preverse(x.v));
+}
+
+template<> EIGEN_DEVICE_FUNC inline void
+ptranspose(Kernel<Packet2cf>& kernel) {
+  __m128d w1 = _mm_castps_pd(kernel.packet[0].v);
+  __m128d w2 = _mm_castps_pd(kernel.packet[1].v);
+
+  __m128 tmp = _mm_castpd_ps(_mm_unpackhi_pd(w1, w2));
+  kernel.packet[0].v = _mm_castpd_ps(_mm_unpacklo_pd(w1, w2));
+  kernel.packet[1].v = tmp;
 }
 
 } // end namespace internal

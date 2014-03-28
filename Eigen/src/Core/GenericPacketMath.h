@@ -217,7 +217,13 @@ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pstore(
 
 /** \internal copy the packet \a from to \a *to, (un-aligned store) */
 template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pstoreu(Scalar* to, const Packet& from)
-{ (*to) = from; }
+{  (*to) = from; }
+
+ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline Packet pgather(const Scalar* from, int /*stride*/)
+ { return ploadu<Packet>(from); }
+
+ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pscatter(Scalar* to, const Packet& from, int /*stride*/)
+ { pstore(to, from); }
 
 /** \internal tries to do cache prefetching of \a addr */
 template<typename Scalar> inline void prefetch(const Scalar* addr)
@@ -386,9 +392,22 @@ template<> inline std::complex<double> pmul(const std::complex<double>& a, const
 
 #endif
 
+
+/***************************************************************************
+ * Kernel, that is a collection of N packets where N is the number of words
+ * in the packet.
+***************************************************************************/
+template <typename Packet> struct Kernel {
+  Packet packet[unpacket_traits<Packet>::size];
+};
+
+template<typename Packet> EIGEN_DEVICE_FUNC inline void
+ptranspose(Kernel<Packet>& /*kernel*/) {
+  // Nothing to do in the scalar case, i.e. a 1x1 matrix.
+}
+
 } // end namespace internal
 
 } // end namespace Eigen
 
 #endif // EIGEN_GENERIC_PACKET_MATH_H
-

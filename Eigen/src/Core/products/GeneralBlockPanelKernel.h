@@ -208,7 +208,16 @@ public:
 
   EIGEN_STRONG_INLINE void madd(const LhsPacket& a, const RhsPacket& b, AccPacket& c, AccPacket& tmp) const
   {
+    // It would be a lot cleaner to call pmadd all the time. Unfortunately if we
+    // let gcc allocate the register in which to store the result of the pmul
+    // (in the case where there is no FMA) gcc fails to figure out how to avoid
+    // spilling register.
+#ifdef EIGEN_VECTORIZE_FMA
+    EIGEN_UNUSED_VARIABLE(tmp);
+    c = pmadd(a,b,c);
+#else
     tmp = b; tmp = pmul(a,tmp); c = padd(c,tmp);
+#endif
   }
 
   EIGEN_STRONG_INLINE void acc(const AccPacket& c, const ResPacket& alpha, ResPacket& r) const
@@ -287,7 +296,12 @@ public:
 
   EIGEN_STRONG_INLINE void madd_impl(const LhsPacket& a, const RhsPacket& b, AccPacket& c, RhsPacket& tmp, const true_type&) const
   {
+#ifdef EIGEN_VECTORIZE_FMA
+    EIGEN_UNUSED_VARIABLE(tmp);
+    c.v = pmadd(a.v,b,c.v);
+#else
     tmp = b; tmp = pmul(a.v,tmp); c.v = padd(c.v,tmp);
+#endif
   }
 
   EIGEN_STRONG_INLINE void madd_impl(const LhsScalar& a, const RhsScalar& b, ResScalar& c, RhsScalar& /*tmp*/, const false_type&) const
@@ -983,9 +997,22 @@ EIGEN_DONT_INLINE void gemm_pack_lhs<Scalar, Index, Pack1, Pack2, StorageOrder, 
     }
     else
     {
-      for(Index k=0; k<depth; k++)
-      {
-        // TODO add a vectorized transpose here
+      const Index peeled_k = (depth/PacketSize)*PacketSize;
+      Index k=0;
+      for(; k<peeled_k; k+=PacketSize) {
+        for (Index m = 0; m < Pack1; m += PacketSize) {
+          Kernel<Packet> kernel;
+          for (int p = 0; p < PacketSize; ++p) {
+            kernel.packet[p] = ploadu<Packet>(&lhs(i+p+m, k));
+          }
+          ptranspose(kernel);
+          for (int p = 0; p < PacketSize; ++p) {
+            pstore(blockA+count+m+Pack1*p, cj.pconj(kernel.packet[p]));
+          }
+        }
+        count += PacketSize*Pack1;
+      }
+      for(; k<depth; k++) {
         Index w=0;
         for(; w<Pack1-3; w+=4)
         {
@@ -1050,6 +1077,7 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, ColMajor, Conjugate, Pan
   Index packet_cols8 = nr>=8 ? (cols/8) * 8 : 0;
   Index packet_cols4 = nr>=4 ? (cols/4) * 4 : 0;
   Index count = 0;
+  const Index peeled_k = (depth/PacketSize)*PacketSize;
   if(nr>=8)
   {
     for(Index j2=0; j2<packet_cols8; j2+=8)
@@ -1064,7 +1092,22 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, ColMajor, Conjugate, Pan
       const Scalar* b5 = &rhs[(j2+5)*rhsStride];
       const Scalar* b6 = &rhs[(j2+6)*rhsStride];
       const Scalar* b7 = &rhs[(j2+7)*rhsStride];
-      for(Index k=0; k<depth; k++)
+      Index k=0;
+      if(PacketSize==8) // TODO enbale vectorized transposition for PacketSize==4
+      {
+        for(; k<peeled_k; k+=PacketSize) {
+          Kernel<Packet> kernel;
+          for (int p = 0; p < PacketSize; ++p) {
+            kernel.packet[p] = ploadu<Packet>(&rhs[(j2+p)*rhsStride+k]);
+          }
+          ptranspose(kernel);
+          for (int p = 0; p < PacketSize; ++p) {
+            pstoreu(blockB+count, cj.pconj(kernel.packet[p]));
+            count+=PacketSize;
+          }
+        }
+      }
+      for(; k<depth; k++)
       {
         blockB[count+0] = cj(b0[k]);
         blockB[count+1] = cj(b1[k]);
@@ -1091,7 +1134,22 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, ColMajor, Conjugate, Pan
       const Scalar* b1 = &rhs[(j2+1)*rhsStride];
       const Scalar* b2 = &rhs[(j2+2)*rhsStride];
       const Scalar* b3 = &rhs[(j2+3)*rhsStride];
-      for(Index k=0; k<depth; k++)
+      Index k=0;
+      if(PacketSize==4) // TODO enbale vectorized transposition for PacketSize==2 ??
+      {
+        for(; k<peeled_k; k+=PacketSize) {
+          Kernel<Packet> kernel;
+          for (int p = 0; p < PacketSize; ++p) {
+            kernel.packet[p] = ploadu<Packet>(&rhs[(j2+p)*rhsStride+k]);
+          }
+          ptranspose(kernel);
+          for (int p = 0; p < PacketSize; ++p) {
+            pstoreu(blockB+count, cj.pconj(kernel.packet[p]));
+            count+=PacketSize;
+          }
+        }
+      }
+      for(; k<depth; k++)
       {
         blockB[count+0] = cj(b0[k]);
         blockB[count+1] = cj(b1[k]);
@@ -1148,10 +1206,14 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, RowMajor, Conjugate, Pan
       if(PanelMode) count += 8 * offset;
       for(Index k=0; k<depth; k++)
       {
-        if (8 == PacketSize) {
+        if (PacketSize==8) {
           Packet A = ploadu<Packet>(&rhs[k*rhsStride + j2]);
           pstoreu(blockB+count, cj.pconj(A));
-          count += PacketSize;
+        } else if (PacketSize==4) {
+          Packet A = ploadu<Packet>(&rhs[k*rhsStride + j2]);
+          Packet B = ploadu<Packet>(&rhs[k*rhsStride + j2 + PacketSize]);
+          pstoreu(blockB+count, cj.pconj(A));
+          pstoreu(blockB+count+PacketSize, cj.pconj(B));
         } else {
           const Scalar* b0 = &rhs[k*rhsStride + j2];
           blockB[count+0] = cj(b0[0]);
@@ -1162,8 +1224,8 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, RowMajor, Conjugate, Pan
           blockB[count+5] = cj(b0[5]);
           blockB[count+6] = cj(b0[6]);
           blockB[count+7] = cj(b0[7]);
-          count += 8;
         }
+        count += 8;
       }
       // skip what we have after
       if(PanelMode) count += 8 * (stride-offset-depth);
@@ -1177,7 +1239,7 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, nr, RowMajor, Conjugate, Pan
       if(PanelMode) count += 4 * offset;
       for(Index k=0; k<depth; k++)
       {
-        if (4 == PacketSize) {
+        if (PacketSize==4) {
           Packet A = ploadu<Packet>(&rhs[k*rhsStride + j2]);
           pstoreu(blockB+count, cj.pconj(A));
           count += PacketSize;

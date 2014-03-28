@@ -281,8 +281,8 @@ class gemm_blocking_space<StorageOrder,_LhsScalar,_RhsScalar,MaxRows, MaxCols, M
       SizeB = ActualCols * MaxDepth
     };
 
-    EIGEN_ALIGN16 LhsScalar m_staticA[SizeA];
-    EIGEN_ALIGN16 RhsScalar m_staticB[SizeB];
+    EIGEN_ALIGN_DEFAULT LhsScalar m_staticA[SizeA];
+    EIGEN_ALIGN_DEFAULT RhsScalar m_staticB[SizeB];
 
   public:
 
