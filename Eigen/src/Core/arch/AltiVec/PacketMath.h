@@ -73,6 +73,7 @@ static Packet4f p4f_ZERO_ = (Packet4f) vec_sl((Packet4ui)p4i_MINUS1, (Packet4ui)
 template<> struct packet_traits<float>  : default_packet_traits
 {
   typedef Packet4f type;
+  typedef Packet4f half;
   enum {
     Vectorizable = 1,
     AlignedOnScalar = 1,
@@ -89,6 +90,7 @@ template<> struct packet_traits<float>  : default_packet_traits
 template<> struct packet_traits<int>    : default_packet_traits
 {
   typedef Packet4i type;
+  typedef Packet4i half;
   enum {
     // FIXME check the Has*
     Vectorizable = 1,
@@ -97,8 +99,8 @@ template<> struct packet_traits<int>    : default_packet_traits
   };
 };
 
-template<> struct unpacket_traits<Packet4f> { typedef float  type; enum {size=4}; };
-template<> struct unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; };
+template<> struct unpacket_traits<Packet4f> { typedef float  type; enum {size=4}; typedef Packet4f half; };
+template<> struct unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; typedef Packet4i half; };
 /*
 inline std::ostream & operator <<(std::ostream & s, const Packet4f & v)
 {

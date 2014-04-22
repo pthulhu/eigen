@@ -66,6 +66,7 @@ typedef uint32x4_t  Packet4ui;
 template<> struct packet_traits<float>  : default_packet_traits
 {
   typedef Packet4f type;
+  typedef Packet4f half;
   enum {
     Vectorizable = 1,
     AlignedOnScalar = 1,
@@ -83,6 +84,7 @@ template<> struct packet_traits<float>  : default_packet_traits
 template<> struct packet_traits<int>    : default_packet_traits
 {
   typedef Packet4i type;
+  typedef Packet4i half;
   enum {
     Vectorizable = 1,
     AlignedOnScalar = 1,
@@ -100,8 +102,8 @@ EIGEN_STRONG_INLINE void        vst1q_f32(float* to, float32x4_t from) { ::vst1q
 EIGEN_STRONG_INLINE void        vst1_f32 (float* to, float32x2_t from) { ::vst1_f32 ((float32_t*)to,from); }
 #endif
 
-template<> struct unpacket_traits<Packet4f> { typedef float  type; enum {size=4}; };
-template<> struct unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; };
+template<> struct unpacket_traits<Packet4f> { typedef float  type; enum {size=4}; typedef Packet4f half; };
+template<> struct unpacket_traits<Packet4i> { typedef int    type; enum {size=4}; typedef Packet4i half; };
 
 template<> EIGEN_STRONG_INLINE Packet4f pset1<Packet4f>(const float&  from) { return vdupq_n_f32(from); }
 template<> EIGEN_STRONG_INLINE Packet4i pset1<Packet4i>(const int&    from)   { return vdupq_n_s32(from); }
@@ -219,6 +221,40 @@ template<> EIGEN_STRONG_INLINE void pstore<int>(int*       to, const Packet4i& f
 
 template<> EIGEN_STRONG_INLINE void pstoreu<float>(float*  to, const Packet4f& from) { EIGEN_DEBUG_UNALIGNED_STORE vst1q_f32(to, from); }
 template<> EIGEN_STRONG_INLINE void pstoreu<int>(int*      to, const Packet4i& from) { EIGEN_DEBUG_UNALIGNED_STORE vst1q_s32(to, from); }
+
+template<> EIGEN_DEVICE_FUNC inline Packet4f pgather<float, Packet4f>(const float* from, int stride)
+{
+  Packet4f res;
+  res = vsetq_lane_f32(from[0*stride], res, 0);
+  res = vsetq_lane_f32(from[1*stride], res, 1);
+  res = vsetq_lane_f32(from[2*stride], res, 2);
+  res = vsetq_lane_f32(from[3*stride], res, 3);
+  return res;
+}
+template<> EIGEN_DEVICE_FUNC inline Packet4i pgather<int, Packet4i>(const int* from, int stride)
+{
+  Packet4i res;
+  res = vsetq_lane_s32(from[0*stride], res, 0);
+  res = vsetq_lane_s32(from[1*stride], res, 1);
+  res = vsetq_lane_s32(from[2*stride], res, 2);
+  res = vsetq_lane_s32(from[3*stride], res, 3);
+  return res;
+}
+
+template<> EIGEN_DEVICE_FUNC inline void pscatter<float, Packet4f>(float* to, const Packet4f& from, int stride)
+{
+  to[stride*0] = vgetq_lane_f32(from, 0);
+  to[stride*1] = vgetq_lane_f32(from, 1);
+  to[stride*2] = vgetq_lane_f32(from, 2);
+  to[stride*3] = vgetq_lane_f32(from, 3);
+}
+template<> EIGEN_DEVICE_FUNC inline void pscatter<int, Packet4i>(int* to, const Packet4i& from, int stride)
+{
+  to[stride*0] = vgetq_lane_s32(from, 0);
+  to[stride*1] = vgetq_lane_s32(from, 1);
+  to[stride*2] = vgetq_lane_s32(from, 2);
+  to[stride*3] = vgetq_lane_s32(from, 3);
+}
 
 template<> EIGEN_STRONG_INLINE void prefetch<float>(const float* addr) { EIGEN_ARM_PREFETCH(addr); }
 template<> EIGEN_STRONG_INLINE void prefetch<int>(const int*     addr) { EIGEN_ARM_PREFETCH(addr); }
