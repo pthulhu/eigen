@@ -42,6 +42,8 @@ namespace internal {
 struct default_packet_traits
 {
   enum {
+    HasHalfPacket = 0,
+    
     HasAdd    = 1,
     HasSub    = 1,
     HasMul    = 1,
@@ -71,10 +73,12 @@ struct default_packet_traits
 template<typename T> struct packet_traits : default_packet_traits
 {
   typedef T type;
+  typedef T half;
   enum {
     Vectorizable = 0,
     size = 1,
-    AlignedOnScalar = 0
+    AlignedOnScalar = 0,
+    HasHalfPacket = 0
   };
   enum {
     HasAdd    = 0,
@@ -157,14 +161,6 @@ pload(const typename unpacket_traits<Packet>::type* from) { return *from; }
 template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
 ploadu(const typename unpacket_traits<Packet>::type* from) { return *from; }
 
-/** \internal \returns a packet with elements of \a *from duplicated.
-  * For instance, for a packet of 8 elements, 4 scalar will be read from \a *from and
-  * duplicated to form: {from[0],from[0],from[1],from[1],,from[2],from[2],,from[3],from[3]}
-  * Currently, this function is only used for scalar * complex products.
- */
-template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
-ploaddup(const typename unpacket_traits<Packet>::type* from) { return *from; }
-
 /** \internal \returns a packet with constant coefficients \a a, e.g.: (a,a,a,a) */
 template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
 pset1(const typename unpacket_traits<Packet>::type& a) { return a; }
@@ -172,6 +168,24 @@ pset1(const typename unpacket_traits<Packet>::type& a) { return a; }
 /** \internal \returns a packet with constant coefficients \a a[0], e.g.: (a[0],a[0],a[0],a[0]) */
 template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
 pload1(const typename unpacket_traits<Packet>::type  *a) { return pset1<Packet>(*a); }
+
+/** \internal \returns a packet with elements of \a *from duplicated.
+  * For instance, for a packet of 8 elements, 4 scalars will be read from \a *from and
+  * duplicated to form: {from[0],from[0],from[1],from[1],from[2],from[2],from[3],from[3]}
+  * Currently, this function is only used for scalar * complex products.
+  */
+template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
+ploaddup(const typename unpacket_traits<Packet>::type* from) { return *from; }
+
+/** \internal \returns a packet with elements of \a *from quadrupled.
+  * For instance, for a packet of 8 elements, 2 scalars will be read from \a *from and
+  * replicated to form: {from[0],from[0],from[0],from[0],from[1],from[1],from[1],from[1]}
+  * Currently, this function is only used in matrix products.
+  * For packet-size smaller or equal to 4, this function is equivalent to pload1 
+  */
+template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
+ploadquad(const typename unpacket_traits<Packet>::type* from)
+{ return pload1<Packet>(from); }
 
 /** \internal equivalent to
   * \code
@@ -217,7 +231,13 @@ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pstore(
 
 /** \internal copy the packet \a from to \a *to, (un-aligned store) */
 template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pstoreu(Scalar* to, const Packet& from)
-{ (*to) = from; }
+{  (*to) = from; }
+
+ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline Packet pgather(const Scalar* from, int /*stride*/)
+ { return ploadu<Packet>(from); }
+
+ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pscatter(Scalar* to, const Packet& from, int /*stride*/)
+ { pstore(to, from); }
 
 /** \internal tries to do cache prefetching of \a addr */
 template<typename Scalar> inline void prefetch(const Scalar* addr)
@@ -237,6 +257,15 @@ preduxp(const Packet* vecs) { return vecs[0]; }
 
 /** \internal \returns the sum of the elements of \a a*/
 template<typename Packet> EIGEN_DEVICE_FUNC inline typename unpacket_traits<Packet>::type predux(const Packet& a)
+{ return a; }
+
+/** \internal \returns the sum of the elements of \a a by block of 4 elements.
+  * For a packet {a0, a1, a2, a3, a4, a5, a6, a7}, it returns a half packet {a0+a4, a1+a5, a2+a6, a3+a7}
+  * For packet-size smaller or equal to 4, this boils down to a noop.
+  */
+template<typename Packet> EIGEN_DEVICE_FUNC inline
+typename conditional<(unpacket_traits<Packet>::size%8)==0,typename unpacket_traits<Packet>::half,Packet>::type
+predux4(const Packet& a)
 { return a; }
 
 /** \internal \returns the product of the elements of \a a*/
@@ -386,9 +415,22 @@ template<> inline std::complex<double> pmul(const std::complex<double>& a, const
 
 #endif
 
+
+/***************************************************************************
+ * PacketBlock, that is a collection of N packets where the number of words
+ * in the packet is a multiple of N.
+***************************************************************************/
+template <typename Packet,int N=unpacket_traits<Packet>::size> struct PacketBlock {
+  Packet packet[N];
+};
+
+template<typename Packet> EIGEN_DEVICE_FUNC inline void
+ptranspose(PacketBlock<Packet,1>& /*kernel*/) {
+  // Nothing to do in the scalar case, i.e. a 1x1 matrix.
+}
+
 } // end namespace internal
 
 } // end namespace Eigen
 
 #endif // EIGEN_GENERIC_PACKET_MATH_H
-
