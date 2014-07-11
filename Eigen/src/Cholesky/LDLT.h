@@ -151,13 +151,6 @@ template<typename _MatrixType, int _UpLo> class LDLT
       eigen_assert(m_isInitialized && "LDLT is not initialized.");
       return m_sign == internal::PositiveSemiDef || m_sign == internal::ZeroSign;
     }
-    
-    #ifdef EIGEN2_SUPPORT
-    inline bool isPositiveDefinite() const
-    {
-      return isPositive();
-    }
-    #endif
 
     /** \returns true if the matrix is negative (semidefinite) */
     inline bool isNegative(void) const
@@ -190,15 +183,6 @@ template<typename _MatrixType, int _UpLo> class LDLT
                 && "LDLT::solve(): invalid number of rows of the right hand side matrix b");
       return internal::solve_retval<LDLT, Rhs>(*this, b.derived());
     }
-
-    #ifdef EIGEN2_SUPPORT
-    template<typename OtherDerived, typename ResultType>
-    bool solve(const MatrixBase<OtherDerived>& b, ResultType *result) const
-    {
-      *result = this->solve(b);
-      return true;
-    }
-    #endif
 
     template<typename Derived>
     bool solveInPlace(MatrixBase<Derived> &bAndX) const;
@@ -274,22 +258,12 @@ template<> struct ldlt_inplace<Lower>
       return true;
     }
 
-    RealScalar cutoff(0), biggest_in_corner;
-
     for (Index k = 0; k < size; ++k)
     {
       // Find largest diagonal element
       Index index_of_biggest_in_corner;
-      biggest_in_corner = mat.diagonal().tail(size-k).cwiseAbs().maxCoeff(&index_of_biggest_in_corner);
+      mat.diagonal().tail(size-k).cwiseAbs().maxCoeff(&index_of_biggest_in_corner);
       index_of_biggest_in_corner += k;
-
-      if(k == 0)
-      {
-        // The biggest overall is the point of reference to which further diagonals
-        // are compared; if any diagonal is negligible compared
-        // to the largest overall, the algorithm bails.
-        cutoff = abs(NumTraits<Scalar>::epsilon() * biggest_in_corner);
-      }
 
       transpositions.coeffRef(k) = index_of_biggest_in_corner;
       if(k != index_of_biggest_in_corner)
@@ -321,16 +295,20 @@ template<> struct ldlt_inplace<Lower>
 
       if(k>0)
       {
-        temp.head(k) = mat.diagonal().head(k).asDiagonal() * A10.adjoint();
+        temp.head(k) = mat.diagonal().real().head(k).asDiagonal() * A10.adjoint();
         mat.coeffRef(k,k) -= (A10 * temp.head(k)).value();
         if(rs>0)
           A21.noalias() -= A20 * temp.head(k);
       }
       
-      if((rs>0) && (abs(mat.coeffRef(k,k)) > cutoff))
-        A21 /= mat.coeffRef(k,k);
-
+      // In some previous versions of Eigen (e.g., 3.2.1), the scaling was omitted if the pivot
+      // was smaller than the cutoff value. However, soince LDLT is not rank-revealing
+      // we should only make sure we do not introduce INF or NaN values.
+      // LAPACK also uses 0 as the cutoff value.
       RealScalar realAkk = numext::real(mat.coeffRef(k,k));
+      if((rs>0) && (abs(realAkk) > RealScalar(0)))
+        A21 /= realAkk;
+
       if (sign == PositiveSemiDef) {
         if (realAkk < 0) sign = Indefinite;
       } else if (sign == NegativeSemiDef) {
@@ -508,11 +486,15 @@ struct solve_retval<LDLT<_MatrixType,_UpLo>, Rhs>
     using std::abs;
     EIGEN_USING_STD_MATH(max);
     typedef typename LDLTType::MatrixType MatrixType;
-    typedef typename LDLTType::Scalar Scalar;
     typedef typename LDLTType::RealScalar RealScalar;
-    const Diagonal<const MatrixType> vectorD = dec().vectorD();
-    RealScalar tolerance = (max)(vectorD.array().abs().maxCoeff() * NumTraits<Scalar>::epsilon(),
-                                 RealScalar(1) / NumTraits<RealScalar>::highest()); // motivated by LAPACK's xGELSS
+    const typename Diagonal<const MatrixType>::RealReturnType vectorD(dec().vectorD());
+    // In some previous versions, tolerance was set to the max of 1/highest and the maximal diagonal entry * epsilon
+    // as motivated by LAPACK's xGELSS:
+    // RealScalar tolerance = (max)(vectorD.array().abs().maxCoeff() *NumTraits<RealScalar>::epsilon(),RealScalar(1) / NumTraits<RealScalar>::highest());
+    // However, LDLT is not rank revealing, and so adjusting the tolerance wrt to the highest
+    // diagonal element is not well justified and to numerical issues in some cases.
+    // Moreover, Lapack's xSYTRS routines use 0 for the tolerance.
+    RealScalar tolerance = RealScalar(1) / NumTraits<RealScalar>::highest();
     for (Index i = 0; i < vectorD.size(); ++i) {
       if(abs(vectorD(i)) > tolerance)
         dst.row(i) /= vectorD(i);
@@ -570,7 +552,7 @@ MatrixType LDLT<MatrixType,_UpLo>::reconstructedMatrix() const
   // L^* P
   res = matrixU() * res;
   // D(L^*P)
-  res = vectorD().asDiagonal() * res;
+  res = vectorD().real().asDiagonal() * res;
   // L(DL^*P)
   res = matrixL() * res;
   // P^T (LDL^*P)
