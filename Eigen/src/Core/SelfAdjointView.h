@@ -39,22 +39,28 @@ struct traits<SelfAdjointView<MatrixType, UpLo> > : traits<MatrixType>
   enum {
     Mode = UpLo | SelfAdjoint,
     Flags =  MatrixTypeNestedCleaned::Flags & (HereditaryBits)
-           & (~(PacketAccessBit | DirectAccessBit | LinearAccessBit)), // FIXME these flags should be preserved
+           & (~(PacketAccessBit | DirectAccessBit | LinearAccessBit)) // FIXME these flags should be preserved
+#ifndef EIGEN_TEST_EVALUATORS
+    ,
     CoeffReadCost = MatrixTypeNestedCleaned::CoeffReadCost
+#endif
   };
 };
 }
 
+#ifndef EIGEN_TEST_EVALUATORS
 template <typename Lhs, int LhsMode, bool LhsIsVector,
           typename Rhs, int RhsMode, bool RhsIsVector>
 struct SelfadjointProductMatrix;
+#endif
 
 // FIXME could also be called SelfAdjointWrapper to be consistent with DiagonalWrapper ??
-template<typename MatrixType, unsigned int UpLo> class SelfAdjointView
-  : public TriangularBase<SelfAdjointView<MatrixType, UpLo> >
+template<typename _MatrixType, unsigned int UpLo> class SelfAdjointView
+  : public TriangularBase<SelfAdjointView<_MatrixType, UpLo> >
 {
   public:
 
+    typedef _MatrixType MatrixType;
     typedef TriangularBase<SelfAdjointView> Base;
     typedef typename internal::traits<SelfAdjointView>::MatrixTypeNested MatrixTypeNested;
     typedef typename internal::traits<SelfAdjointView>::MatrixTypeNestedCleaned MatrixTypeNestedCleaned;
@@ -65,7 +71,8 @@ template<typename MatrixType, unsigned int UpLo> class SelfAdjointView
     typedef typename MatrixType::Index Index;
 
     enum {
-      Mode = internal::traits<SelfAdjointView>::Mode
+      Mode = internal::traits<SelfAdjointView>::Mode,
+      Flags = internal::traits<SelfAdjointView>::Flags
     };
     typedef typename MatrixType::PlainObject PlainObject;
 
@@ -111,6 +118,35 @@ template<typename MatrixType, unsigned int UpLo> class SelfAdjointView
     EIGEN_DEVICE_FUNC
     MatrixTypeNestedCleaned& nestedExpression() { return *const_cast<MatrixTypeNestedCleaned*>(&m_matrix); }
 
+#ifdef EIGEN_TEST_EVALUATORS
+
+    /** Efficient triangular matrix times vector/matrix product */
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    const Product<SelfAdjointView,OtherDerived>
+    operator*(const MatrixBase<OtherDerived>& rhs) const
+    {
+      return Product<SelfAdjointView,OtherDerived>(*this, rhs.derived());
+    }
+
+    /** Efficient vector/matrix times triangular matrix product */
+    template<typename OtherDerived> friend
+    EIGEN_DEVICE_FUNC
+    const Product<OtherDerived,SelfAdjointView>
+    operator*(const MatrixBase<OtherDerived>& lhs, const SelfAdjointView& rhs)
+    {
+      return Product<OtherDerived,SelfAdjointView>(lhs.derived(),rhs);
+    }
+    
+    friend EIGEN_DEVICE_FUNC
+    const SelfAdjointView<const CwiseUnaryOp<internal::scalar_multiple_op<Scalar>,MatrixType>,UpLo>
+    operator*(const Scalar& s, const SelfAdjointView& mat)
+    {
+      return (s*mat.nestedExpression()).template selfadjointView<UpLo>();
+    }
+
+#else // EIGEN_TEST_EVALUATORS
+
     /** Efficient self-adjoint matrix times vector/matrix product */
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC
@@ -132,6 +168,7 @@ template<typename MatrixType, unsigned int UpLo> class SelfAdjointView
               <OtherDerived,0,OtherDerived::IsVectorAtCompileTime,MatrixType,Mode,false>
               (lhs.derived(),rhs.m_matrix);
     }
+#endif
 
     /** Perform a symmetric rank 2 update of the selfadjoint matrix \c *this:
       * \f$ this = this + \alpha u v^* + conj(\alpha) v u^* \f$
@@ -194,6 +231,8 @@ template<typename MatrixType, unsigned int UpLo> class SelfAdjointView
 
 namespace internal {
 
+#ifndef EIGEN_TEST_EVALUATORS
+ 
 template<typename Derived1, typename Derived2, int UnrollCount, bool ClearOpposite>
 struct triangular_assignment_selector<Derived1, Derived2, (SelfAdjoint|Upper), UnrollCount, ClearOpposite>
 {
@@ -285,6 +324,64 @@ struct triangular_assignment_selector<Derived1, Derived2, SelfAdjoint|Lower, Dyn
     }
   }
 };
+
+#endif // EIGEN_TEST_EVALUATORS
+
+#ifdef EIGEN_ENABLE_EVALUATORS
+// TODO currently a selfadjoint expression has the form SelfAdjointView<.,.>
+//      in the future selfadjoint-ness should be defined by the expression traits
+//      such that Transpose<SelfAdjointView<.,.> > is valid. (currently TriangularBase::transpose() is overloaded to make it work)
+template<typename MatrixType, unsigned int Mode>
+struct evaluator_traits<SelfAdjointView<MatrixType,Mode> >
+{
+  typedef typename storage_kind_to_evaluator_kind<typename MatrixType::StorageKind>::Kind Kind;
+  typedef SelfAdjointShape Shape;
+  
+  static const int AssumeAliasing = 0;
+};
+
+template<int UpLo, int SetOpposite, typename DstEvaluatorTypeT, typename SrcEvaluatorTypeT, typename Functor, int Version>
+class triangular_dense_assignment_kernel<UpLo,SelfAdjoint,SetOpposite,DstEvaluatorTypeT,SrcEvaluatorTypeT,Functor,Version>
+  : public generic_dense_assignment_kernel<DstEvaluatorTypeT, SrcEvaluatorTypeT, Functor, Version>
+{
+protected:
+  typedef generic_dense_assignment_kernel<DstEvaluatorTypeT, SrcEvaluatorTypeT, Functor, Version> Base;
+  typedef typename Base::DstXprType DstXprType;
+  typedef typename Base::SrcXprType SrcXprType;
+  using Base::m_dst;
+  using Base::m_src;
+  using Base::m_functor;
+public:
+  
+  typedef typename Base::DstEvaluatorType DstEvaluatorType;
+  typedef typename Base::SrcEvaluatorType SrcEvaluatorType;
+  typedef typename Base::Scalar Scalar;
+  typedef typename Base::Index Index;
+  typedef typename Base::AssignmentTraits AssignmentTraits;
+  
+  
+  triangular_dense_assignment_kernel(DstEvaluatorType &dst, const SrcEvaluatorType &src, const Functor &func, DstXprType& dstExpr)
+    : Base(dst, src, func, dstExpr)
+  {}
+  
+  void assignCoeff(Index row, Index col)
+  {
+    eigen_internal_assert(row!=col);
+    Scalar tmp = m_src.coeff(row,col);
+    m_functor.assignCoeff(m_dst.coeffRef(row,col), tmp);
+    m_functor.assignCoeff(m_dst.coeffRef(col,row), numext::conj(tmp));
+  }
+  
+  void assignDiagonalCoeff(Index id)
+  {
+    Base::assignCoeff(id,id);
+  }
+  
+  void assignOppositeCoeff(Index, Index)
+  { eigen_internal_assert(false && "should never be called"); }
+};
+
+#endif // EIGEN_ENABLE_EVALUATORS
 
 } // end namespace internal
 

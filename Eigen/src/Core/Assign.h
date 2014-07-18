@@ -13,7 +13,7 @@
 #define EIGEN_ASSIGN_H
 
 namespace Eigen {
-
+#ifndef EIGEN_TEST_EVALUATORS
 namespace internal {
 
 /***************************************************************************
@@ -489,6 +489,8 @@ struct assign_impl<Derived1, Derived2, SliceVectorizedTraversal, NoUnrolling, Ve
 
 } // end namespace internal
 
+#endif // EIGEN_TEST_EVALUATORS
+
 /***************************************************************************
 * Part 4 : implementation of DenseBase methods
 ***************************************************************************/
@@ -508,11 +510,8 @@ EIGEN_STRONG_INLINE Derived& DenseBase<Derived>
 
 #ifdef EIGEN_TEST_EVALUATORS
   
-#ifdef EIGEN_DEBUG_ASSIGN
-  internal::copy_using_evaluator_traits<Derived, OtherDerived>::debug();
-#endif
   eigen_assert(rows() == other.rows() && cols() == other.cols());
-  internal::call_dense_assignment_loop(derived(),other.derived());
+  internal::call_assignment_no_alias(derived(),other.derived());
   
 #else // EIGEN_TEST_EVALUATORS
 
@@ -533,6 +532,7 @@ EIGEN_STRONG_INLINE Derived& DenseBase<Derived>
 
 namespace internal {
 
+#ifndef EIGEN_TEST_EVALUATORS
 template<typename Derived, typename OtherDerived,
          bool EvalBeforeAssigning = (int(internal::traits<OtherDerived>::Flags) & EvalBeforeAssigningBit) != 0,
          bool NeedToTranspose = ((int(Derived::RowsAtCompileTime) == 1 && int(OtherDerived::ColsAtCompileTime) == 1)
@@ -568,9 +568,62 @@ struct assign_selector<Derived,OtherDerived,true,true> {
   EIGEN_DEVICE_FUNC
   static EIGEN_STRONG_INLINE Derived& run(Derived& dst, const OtherDerived& other) { return dst.lazyAssign(other.transpose().eval()); }
 };
-
+#endif // EIGEN_TEST_EVALUATORS
 } // end namespace internal
 
+#ifdef EIGEN_TEST_EVALUATORS
+template<typename Derived>
+template<typename OtherDerived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& DenseBase<Derived>::operator=(const DenseBase<OtherDerived>& other)
+{
+  internal::call_assignment(derived(), other.derived());
+  return derived();
+}
+
+template<typename Derived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& DenseBase<Derived>::operator=(const DenseBase& other)
+{
+  internal::call_assignment(derived(), other.derived());
+  return derived();
+}
+
+template<typename Derived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const MatrixBase& other)
+{
+  internal::call_assignment(derived(), other.derived());
+  return derived();
+}
+
+template<typename Derived>
+template <typename OtherDerived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const DenseBase<OtherDerived>& other)
+{
+  internal::call_assignment(derived(), other.derived());
+  return derived();
+}
+
+template<typename Derived>
+template <typename OtherDerived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const EigenBase<OtherDerived>& other)
+{
+  internal::call_assignment(derived(), other.derived());
+  return derived();
+}
+
+template<typename Derived>
+template<typename OtherDerived>
+EIGEN_DEVICE_FUNC
+EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const ReturnByValue<OtherDerived>& other)
+{
+  other.derived().evalTo(derived());
+  return derived();
+}
+#else // EIGEN_TEST_EVALUATORS
 template<typename Derived>
 template<typename OtherDerived>
 EIGEN_DEVICE_FUNC
@@ -616,6 +669,7 @@ EIGEN_STRONG_INLINE Derived& MatrixBase<Derived>::operator=(const ReturnByValue<
 {
   return internal::assign_selector<Derived,OtherDerived,false>::evalTo(derived(), other.derived());
 }
+#endif // EIGEN_TEST_EVALUATORS
 
 } // end namespace Eigen
 

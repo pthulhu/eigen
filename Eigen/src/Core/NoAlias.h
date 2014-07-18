@@ -30,9 +30,37 @@ namespace Eigen {
 template<typename ExpressionType, template <typename> class StorageBase>
 class NoAlias
 {
-    typedef typename ExpressionType::Scalar Scalar;
   public:
+    typedef typename ExpressionType::Scalar Scalar;
+    
     NoAlias(ExpressionType& expression) : m_expression(expression) {}
+    
+#ifdef EIGEN_TEST_EVALUATORS
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE ExpressionType& operator=(const StorageBase<OtherDerived>& other)
+    {
+      call_assignment_no_alias(m_expression, other.derived(), internal::assign_op<Scalar>());
+      return m_expression;
+    }
+    
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE ExpressionType& operator+=(const StorageBase<OtherDerived>& other)
+    {
+      call_assignment_no_alias(m_expression, other.derived(), internal::add_assign_op<Scalar>());
+      return m_expression;
+    }
+    
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE ExpressionType& operator-=(const StorageBase<OtherDerived>& other)
+    {
+      call_assignment_no_alias(m_expression, other.derived(), internal::sub_assign_op<Scalar>());
+      return m_expression;
+    }
+    
+#else
 
     /** Behaves like MatrixBase::lazyAssign(other)
       * \sa MatrixBase::lazyAssign() */
@@ -90,6 +118,8 @@ class NoAlias
     template<typename OtherDerived>
     ExpressionType& operator=(const ReturnByValue<OtherDerived>& func)
     { return m_expression = func; }
+#endif
+
 #endif
 
     EIGEN_DEVICE_FUNC

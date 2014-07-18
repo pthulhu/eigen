@@ -12,6 +12,8 @@
 
 namespace Eigen { 
 
+#ifndef EIGEN_TEST_EVALUATORS
+  
 /** \class SwapWrapper
   * \ingroup Core_Module
   *
@@ -134,6 +136,60 @@ template<typename ExpressionType> class SwapWrapper
   protected:
     ExpressionType& m_expression;
 };
+
+#endif
+
+#ifdef EIGEN_ENABLE_EVALUATORS
+
+namespace internal {
+
+// Overload default assignPacket behavior for swapping them
+template<typename DstEvaluatorTypeT, typename SrcEvaluatorTypeT>
+class generic_dense_assignment_kernel<DstEvaluatorTypeT, SrcEvaluatorTypeT, swap_assign_op<typename DstEvaluatorTypeT::Scalar>, Specialized>
+ : public generic_dense_assignment_kernel<DstEvaluatorTypeT, SrcEvaluatorTypeT, swap_assign_op<typename DstEvaluatorTypeT::Scalar>, BuiltIn>
+{
+protected:
+  typedef generic_dense_assignment_kernel<DstEvaluatorTypeT, SrcEvaluatorTypeT, swap_assign_op<typename DstEvaluatorTypeT::Scalar>, BuiltIn> Base;
+  typedef typename DstEvaluatorTypeT::PacketScalar PacketScalar;
+  using Base::m_dst;
+  using Base::m_src;
+  using Base::m_functor;
+  
+public:
+  typedef typename Base::Scalar Scalar;
+  typedef typename Base::Index Index;
+  typedef typename Base::DstXprType DstXprType;
+  typedef swap_assign_op<Scalar> Functor;
+  
+  generic_dense_assignment_kernel(DstEvaluatorTypeT &dst, const SrcEvaluatorTypeT &src, const Functor &func, DstXprType& dstExpr)
+    : Base(dst, src, func, dstExpr)
+  {}
+  
+  template<int StoreMode, int LoadMode>
+  void assignPacket(Index row, Index col)
+  {
+    m_functor.template swapPacket<StoreMode,LoadMode,PacketScalar>(&m_dst.coeffRef(row,col), &const_cast<SrcEvaluatorTypeT&>(m_src).coeffRef(row,col));
+  }
+  
+  template<int StoreMode, int LoadMode>
+  void assignPacket(Index index)
+  {
+    m_functor.template swapPacket<StoreMode,LoadMode,PacketScalar>(&m_dst.coeffRef(index), &const_cast<SrcEvaluatorTypeT&>(m_src).coeffRef(index));
+  }
+  
+  // TODO find a simple way not to have to copy/paste this function from generic_dense_assignment_kernel, by simple I mean no CRTP (Gael)
+  template<int StoreMode, int LoadMode>
+  void assignPacketByOuterInner(Index outer, Index inner)
+  {
+    Index row = Base::rowIndexByOuterInner(outer, inner); 
+    Index col = Base::colIndexByOuterInner(outer, inner);
+    assignPacket<StoreMode,LoadMode>(row, col);
+  }
+};
+
+} // namespace internal
+
+#endif
 
 } // end namespace Eigen
 

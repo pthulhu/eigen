@@ -2,7 +2,7 @@
 // for linear algebra.
 //
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
-// Copyright (C) 2009-2010 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2009-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -41,11 +41,18 @@ struct traits<Transpose<MatrixType> > : traits<MatrixType>
     ColsAtCompileTime = MatrixType::RowsAtCompileTime,
     MaxRowsAtCompileTime = MatrixType::MaxColsAtCompileTime,
     MaxColsAtCompileTime = MatrixType::MaxRowsAtCompileTime,
+#ifndef EIGEN_TEST_EVALUATORS
     FlagsLvalueBit = is_lvalue<MatrixType>::value ? LvalueBit : 0,
     Flags0 = MatrixTypeNestedPlain::Flags & ~(LvalueBit | NestByRefBit),
     Flags1 = Flags0 | FlagsLvalueBit,
     Flags = Flags1 ^ RowMajorBit,
     CoeffReadCost = MatrixTypeNestedPlain::CoeffReadCost,
+#else
+    FlagsLvalueBit = is_lvalue<MatrixType>::value ? LvalueBit : 0,
+    Flags0 = MatrixTypeNestedPlain::Flags & ~(LvalueBit | NestByRefBit),
+    Flags1 = Flags0 | FlagsLvalueBit,
+    Flags = Flags1 ^ RowMajorBit,
+#endif
     InnerStrideAtCompileTime = inner_stride_at_compile_time<MatrixType>::ret,
     OuterStrideAtCompileTime = outer_stride_at_compile_time<MatrixType>::ret
   };
@@ -61,6 +68,7 @@ template<typename MatrixType> class Transpose
 
     typedef typename TransposeImpl<MatrixType,typename internal::traits<MatrixType>::StorageKind>::Base Base;
     EIGEN_GENERIC_PUBLIC_INTERFACE(Transpose)
+    typedef typename internal::remove_all<MatrixType>::type NestedExpression;
 
     EIGEN_DEVICE_FUNC
     inline Transpose(MatrixType& a_matrix) : m_matrix(a_matrix) {}
@@ -100,12 +108,24 @@ struct TransposeImpl_base<MatrixType, false>
 
 } // end namespace internal
 
+#ifdef EIGEN_TEST_EVALUATORS
+// Generic API dispatcher
+template<typename XprType, typename StorageKind>
+class TransposeImpl
+  : public internal::generic_xpr_base<Transpose<XprType> >::type
+{
+public:
+  typedef typename internal::generic_xpr_base<Transpose<XprType> >::type Base;
+};
+#endif
+
 template<typename MatrixType> class TransposeImpl<MatrixType,Dense>
   : public internal::TransposeImpl_base<MatrixType>::type
 {
   public:
 
     typedef typename internal::TransposeImpl_base<MatrixType>::type Base;
+    using Base::coeffRef;
     EIGEN_DENSE_PUBLIC_INTERFACE(Transpose<MatrixType>)
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(TransposeImpl)
 
@@ -120,6 +140,8 @@ template<typename MatrixType> class TransposeImpl<MatrixType,Dense>
 
     inline ScalarWithConstIfNotLvalue* data() { return derived().nestedExpression().data(); }
     inline const Scalar* data() const { return derived().nestedExpression().data(); }
+    
+#ifndef EIGEN_TEST_EVALUATORS
 
     EIGEN_DEVICE_FUNC
     inline ScalarWithConstIfNotLvalue& coeffRef(Index rowId, Index colId)
@@ -133,18 +155,6 @@ template<typename MatrixType> class TransposeImpl<MatrixType,Dense>
     {
       EIGEN_STATIC_ASSERT_LVALUE(MatrixType)
       return derived().nestedExpression().const_cast_derived().coeffRef(index);
-    }
-
-    EIGEN_DEVICE_FUNC
-    inline const Scalar& coeffRef(Index rowId, Index colId) const
-    {
-      return derived().nestedExpression().coeffRef(colId, rowId);
-    }
-
-    EIGEN_DEVICE_FUNC
-    inline const Scalar& coeffRef(Index index) const
-    {
-      return derived().nestedExpression().coeffRef(index);
     }
 
     EIGEN_DEVICE_FUNC
@@ -181,6 +191,20 @@ template<typename MatrixType> class TransposeImpl<MatrixType,Dense>
     inline void writePacket(Index index, const PacketScalar& x)
     {
       derived().nestedExpression().const_cast_derived().template writePacket<LoadMode>(index, x);
+    }
+#endif
+
+    // FIXME: shall we keep the const version of coeffRef?
+    EIGEN_DEVICE_FUNC
+    inline const Scalar& coeffRef(Index rowId, Index colId) const
+    {
+      return derived().nestedExpression().coeffRef(colId, rowId);
+    }
+
+    EIGEN_DEVICE_FUNC
+    inline const Scalar& coeffRef(Index index) const
+    {
+      return derived().nestedExpression().coeffRef(index);
     }
 };
 

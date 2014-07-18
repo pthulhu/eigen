@@ -53,8 +53,14 @@ struct traits<Replicate<MatrixType,RowFactor,ColFactor> >
     IsRowMajor = MaxRowsAtCompileTime==1 && MaxColsAtCompileTime!=1 ? 1
                : MaxColsAtCompileTime==1 && MaxRowsAtCompileTime!=1 ? 0
                : (MatrixType::Flags & RowMajorBit) ? 1 : 0,
+    
+#ifndef EIGEN_TEST_EVALUATORS
     Flags = (_MatrixTypeNested::Flags & HereditaryBits & ~RowMajorBit) | (IsRowMajor ? RowMajorBit : 0),
     CoeffReadCost = _MatrixTypeNested::CoeffReadCost
+#else
+    // FIXME enable DirectAccess with negative strides?
+    Flags = IsRowMajor ? RowMajorBit : 0
+#endif
   };
 };
 }
@@ -68,6 +74,7 @@ template<typename MatrixType,int RowFactor,int ColFactor> class Replicate
 
     typedef typename internal::dense_xpr_base<Replicate>::type Base;
     EIGEN_DENSE_PUBLIC_INTERFACE(Replicate)
+    typedef typename internal::remove_all<MatrixType>::type NestedExpression;
 
     template<typename OriginalMatrixType>
     inline explicit Replicate(const OriginalMatrixType& a_matrix)
