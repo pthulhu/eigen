@@ -163,7 +163,7 @@ static void test_3d()
   VERIFY_IS_EQUAL((epsilon(0,2,1)), -1);
   VERIFY_IS_EQUAL((epsilon(1,0,2)), -1);
 
-  std::array<Eigen::DenseIndex, 3> dims{{2,3,4}};
+  array<Eigen::DenseIndex, 3> dims{{2,3,4}};
   Tensor<int, 3> t1(dims);
   Tensor<int, 3, RowMajor> t2(dims);
 
@@ -244,7 +244,7 @@ static void test_simple_assign()
   epsilon(0,1,2) = epsilon(2,0,1) = epsilon(1,2,0) = 1;
   epsilon(2,1,0) = epsilon(0,2,1) = epsilon(1,0,2) = -1;
 
-  Tensor<int, 3> e2(2,3,1);
+  Tensor<int, 3> e2(3,3,3);
   e2.setZero();
   VERIFY_IS_EQUAL((e2(1,2,0)), 0);
 
