@@ -12,10 +12,13 @@
 #define EIGEN_CORE_H
 
 // EIGEN_TEST_EVALUATORS => EIGEN_ENABLE_EVALUATORS
-#ifdef EIGEN_TEST_EVALUATORS
-#ifndef EIGEN_ENABLE_EVALUATORS
-#define EIGEN_ENABLE_EVALUATORS
-#endif
+#ifndef EIGEN_TEST_NO_EVALUATORS
+  #ifndef EIGEN_TEST_EVALUATORS
+  #define EIGEN_TEST_EVALUATORS
+  #endif
+  #ifndef EIGEN_ENABLE_EVALUATORS
+  #define EIGEN_ENABLE_EVALUATORS
+  #endif
 #endif
 
 // first thing Eigen does: stop the compiler from committing suicide
@@ -47,6 +50,14 @@
   #define EIGEN_USING_STD_MATH(FUNC) using ::FUNC;
 #else
   #define EIGEN_USING_STD_MATH(FUNC) using std::FUNC;
+#endif
+
+#if (defined(_CPPUNWIND) || defined(__EXCEPTIONS)) && !defined(__CUDA_ARCH__) && !defined(EIGEN_EXCEPTIONS)
+  #define EIGEN_EXCEPTIONS
+#endif
+
+#ifdef EIGEN_EXCEPTIONS
+  #include <new>
 #endif
 
 // then include this file where all our macros are defined. It's really important to do it first because
@@ -214,14 +225,6 @@
 // required for __cpuid, needs to be included after cmath
 #if defined(_MSC_VER) && (defined(_M_IX86)||defined(_M_X64)) && (!defined(_WIN32_WCE))
   #include <intrin.h>
-#endif
-
-#if (defined(_CPPUNWIND) || defined(__EXCEPTIONS)) && !defined(__CUDA_ARCH__)
-  #define EIGEN_EXCEPTIONS
-#endif
-
-#ifdef EIGEN_EXCEPTIONS
-  #include <new>
 #endif
 
 /** \brief Namespace containing all symbols from the %Eigen library. */
