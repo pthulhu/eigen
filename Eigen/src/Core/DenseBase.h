@@ -74,6 +74,7 @@ template<typename Derived> class DenseBase
     using Base::colIndexByOuterInner;
     using Base::coeff;
     using Base::coeffByOuterInner;
+#ifndef EIGEN_TEST_EVALUATORS
     using Base::packet;
     using Base::packetByOuterInner;
     using Base::writePacket;
@@ -84,6 +85,7 @@ template<typename Derived> class DenseBase
     using Base::copyCoeffByOuterInner;
     using Base::copyPacket;
     using Base::copyPacketByOuterInner;
+#endif
     using Base::operator();
     using Base::operator[];
     using Base::x;
@@ -169,10 +171,12 @@ template<typename Derived> class DenseBase
       InnerSizeAtCompileTime = int(IsVectorAtCompileTime) ? int(SizeAtCompileTime)
                              : int(IsRowMajor) ? int(ColsAtCompileTime) : int(RowsAtCompileTime),
 
+#ifndef EIGEN_TEST_EVALUATORS
       CoeffReadCost = internal::traits<Derived>::CoeffReadCost,
         /**< This is a rough measure of how expensive it is to read one coefficient from
           * this expression.
           */
+#endif
 
       InnerStrideAtCompileTime = internal::inner_stride_at_compile_time<Derived>::ret,
       OuterStrideAtCompileTime = internal::outer_stride_at_compile_time<Derived>::ret
@@ -278,7 +282,8 @@ template<typename Derived> class DenseBase
     Derived& operator=(const ReturnByValue<OtherDerived>& func);
 
 #ifndef EIGEN_PARSED_BY_DOXYGEN
-    /** Copies \a other into *this without evaluating other. \returns a reference to *this. */
+    /** Copies \a other into *this without evaluating other. \returns a reference to *this.
+      * \deprecated */
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC
     Derived& lazyAssign(const DenseBase<OtherDerived>& other);
@@ -287,8 +292,15 @@ template<typename Derived> class DenseBase
     EIGEN_DEVICE_FUNC
     CommaInitializer<Derived> operator<< (const Scalar& s);
 
+#ifndef EIGEN_TEST_EVALUATORS
     template<unsigned int Added,unsigned int Removed>
     const Flagged<Derived, Added, Removed> flagged() const;
+#else
+    // TODO flagged is temporarly disabled. It seems useless now
+    template<unsigned int Added,unsigned int Removed>
+    const Derived& flagged() const
+    { return derived(); }
+#endif
 
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC
@@ -387,7 +399,31 @@ template<typename Derived> class DenseBase
       // size types on MSVC.
       return typename internal::eval<Derived>::type(derived());
     }
+    
+#ifdef EIGEN_TEST_EVALUATORS
+    /** swaps *this with the expression \a other.
+      *
+      */
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    void swap(const DenseBase<OtherDerived>& other,
+              int = OtherDerived::ThisConstantIsPrivateInPlainObjectBase)
+    {
+      eigen_assert(rows()==other.rows() && cols()==other.cols());
+      call_assignment(derived(), other.const_cast_derived(), internal::swap_assign_op<Scalar>());
+    }
 
+    /** swaps *this with the matrix or array \a other.
+      *
+      */
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    void swap(PlainObjectBase<OtherDerived>& other)
+    {
+      eigen_assert(rows()==other.rows() && cols()==other.cols());
+      call_assignment(derived(), other.derived(), internal::swap_assign_op<Scalar>());
+    }
+#else // EIGEN_TEST_EVALUATORS
     /** swaps *this with the expression \a other.
       *
       */
@@ -408,7 +444,7 @@ template<typename Derived> class DenseBase
     {
       SwapWrapper<Derived>(derived()).lazyAssign(other.derived());
     }
-
+#endif // EIGEN_TEST_EVALUATORS
 
     EIGEN_DEVICE_FUNC inline const NestByValue<Derived> nestByValue() const;
     EIGEN_DEVICE_FUNC inline const ForceAlignedAccess<Derived> forceAlignedAccess() const;

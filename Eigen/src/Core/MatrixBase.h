@@ -66,8 +66,10 @@ template<typename Derived> class MatrixBase
     using Base::MaxSizeAtCompileTime;
     using Base::IsVectorAtCompileTime;
     using Base::Flags;
+#ifndef EIGEN_TEST_EVALUATORS
     using Base::CoeffReadCost;
-
+#endif
+    
     using Base::derived;
     using Base::const_cast_derived;
     using Base::rows;
@@ -200,7 +202,11 @@ template<typename Derived> class MatrixBase
 
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC 
+#ifdef EIGEN_TEST_EVALUATORS
+    const Product<Derived,OtherDerived,LazyProduct>
+#else
     const typename LazyProductReturnType<Derived,OtherDerived>::Type
+#endif
     lazyProduct(const MatrixBase<OtherDerived> &other) const;
 
     template<typename OtherDerived>
@@ -212,10 +218,17 @@ template<typename Derived> class MatrixBase
     template<typename OtherDerived>
     void applyOnTheRight(const EigenBase<OtherDerived>& other);
 
+#ifndef EIGEN_TEST_EVALUATORS
     template<typename DiagonalDerived>
     EIGEN_DEVICE_FUNC
     const DiagonalProduct<Derived, DiagonalDerived, OnTheRight>
     operator*(const DiagonalBase<DiagonalDerived> &diagonal) const;
+#else // EIGEN_TEST_EVALUATORS
+    template<typename DiagonalDerived>
+    EIGEN_DEVICE_FUNC
+    const Product<Derived, DiagonalDerived, LazyProduct>
+    operator*(const DiagonalBase<DiagonalDerived> &diagonal) const;
+#endif // EIGEN_TEST_EVALUATORS
 
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC
@@ -334,10 +347,19 @@ template<typename Derived> class MatrixBase
 
     NoAlias<Derived,Eigen::MatrixBase > noalias();
 
+#ifndef EIGEN_TEST_EVALUATORS
     inline const ForceAlignedAccess<Derived> forceAlignedAccess() const;
     inline ForceAlignedAccess<Derived> forceAlignedAccess();
     template<bool Enable> inline typename internal::add_const_on_value_type<typename internal::conditional<Enable,ForceAlignedAccess<Derived>,Derived&>::type>::type forceAlignedAccessIf() const;
     template<bool Enable> inline typename internal::conditional<Enable,ForceAlignedAccess<Derived>,Derived&>::type forceAlignedAccessIf();
+#else
+    // TODO forceAlignedAccess is temporarly disabled
+    // Need to find a nicer workaround.
+    inline const Derived& forceAlignedAccess() const { return derived(); }
+    inline Derived& forceAlignedAccess() { return derived(); }
+    template<bool Enable> inline const Derived& forceAlignedAccessIf() const { return derived(); }
+    template<bool Enable> inline Derived& forceAlignedAccessIf() { return derived(); }
+#endif
 
     Scalar trace() const;
 
@@ -360,8 +382,13 @@ template<typename Derived> class MatrixBase
 
     const PartialPivLU<PlainObject> lu() const;
 
+    #ifdef EIGEN_TEST_EVALUATORS
+    EIGEN_DEVICE_FUNC
+    const Inverse<Derived> inverse() const;
+    #else
     EIGEN_DEVICE_FUNC
     const internal::inverse_impl<Derived> inverse() const;
+    #endif
     template<typename ResultType>
     void computeInverseAndDetWithCheck(
       ResultType& inverse,

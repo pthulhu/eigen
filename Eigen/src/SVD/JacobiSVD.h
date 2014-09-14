@@ -593,27 +593,12 @@ template<typename _MatrixType, int QRPreconditioner> class JacobiSVD
       return compute(matrix, m_computationOptions);
     }
 
-    /** \returns a (least squares) solution of \f$ A x = b \f$ using the current SVD decomposition of A.
-      *
-      * \param b the right-hand-side of the equation to solve.
-      *
-      * \note Solving requires both U and V to be computed. Thin U and V are enough, there is no need for full U or V.
-      *
-      * \note SVD solving is implicitly least-squares. Thus, this method serves both purposes of exact solving and least-squares solving.
-      * In other words, the returned solution is guaranteed to minimize the Euclidean norm \f$ \Vert A x - b \Vert \f$.
-      */
-    template<typename Rhs>
-    inline const internal::solve_retval<JacobiSVD, Rhs>
-    solve(const MatrixBase<Rhs>& b) const
-    {
-      eigen_assert(m_isInitialized && "JacobiSVD is not initialized.");
-      eigen_assert(computeU() && computeV() && "JacobiSVD::solve() requires both unitaries U and V to be computed (thin unitaries suffice).");
-      return internal::solve_retval<JacobiSVD, Rhs>(*this, b.derived());
-    }
-    
     using Base::computeU;
     using Base::computeV;
-    
+    using Base::rows;
+    using Base::cols;
+    using Base::rank;
+
   private:
     void allocate(Index rows, Index cols, unsigned int computationOptions);
 
@@ -798,31 +783,6 @@ JacobiSVD<MatrixType, QRPreconditioner>::compute(const MatrixType& matrix, unsig
   m_isInitialized = true;
   return *this;
 }
-
-namespace internal {
-template<typename _MatrixType, int QRPreconditioner, typename Rhs>
-struct solve_retval<JacobiSVD<_MatrixType, QRPreconditioner>, Rhs>
-  : solve_retval_base<JacobiSVD<_MatrixType, QRPreconditioner>, Rhs>
-{
-  typedef JacobiSVD<_MatrixType, QRPreconditioner> JacobiSVDType;
-  EIGEN_MAKE_SOLVE_HELPERS(JacobiSVDType,Rhs)
-
-  template<typename Dest> void evalTo(Dest& dst) const
-  {
-    eigen_assert(rhs().rows() == dec().rows());
-
-    // A = U S V^*
-    // So A^{-1} = V S^{-1} U^*
-
-    Matrix<Scalar, Dynamic, Rhs::ColsAtCompileTime, 0, _MatrixType::MaxRowsAtCompileTime, Rhs::MaxColsAtCompileTime> tmp;
-    Index rank = dec().rank();
-    
-    tmp.noalias() = dec().matrixU().leftCols(rank).adjoint() * rhs();
-    tmp = dec().singularValues().head(rank).asDiagonal().inverse() * tmp;
-    dst = dec().matrixV().leftCols(rank) * tmp;
-  }
-};
-} // end namespace internal
 
 #ifndef __CUDACC__
 /** \svd_module

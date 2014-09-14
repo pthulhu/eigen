@@ -2,13 +2,14 @@
 // for linear algebra.
 //
 // Copyright (C) 2008-2010 Benoit Jacob <jacob.benoit.1@gmail.com>
+// Copyright (C) 2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef EIGEN_INVERSE_H
-#define EIGEN_INVERSE_H
+#ifndef EIGEN_INVERSE_IMPL_H
+#define EIGEN_INVERSE_IMPL_H
 
 namespace Eigen { 
 
@@ -42,7 +43,12 @@ struct compute_inverse<MatrixType, ResultType, 1>
   static inline void run(const MatrixType& matrix, ResultType& result)
   {
     typedef typename MatrixType::Scalar Scalar;
+#ifdef EIGEN_TEST_EVALUATORS
+    typename internal::evaluator<MatrixType>::type matrixEval(matrix);
+    result.coeffRef(0,0) = Scalar(1) / matrixEval.coeff(0,0);
+#else
     result.coeffRef(0,0) = Scalar(1) / matrix.coeff(0,0);
+#endif
   }
 };
 
@@ -75,10 +81,10 @@ inline void compute_inverse_size2_helper(
     const MatrixType& matrix, const typename ResultType::Scalar& invdet,
     ResultType& result)
 {
-  result.coeffRef(0,0) = matrix.coeff(1,1) * invdet;
+  result.coeffRef(0,0) =  matrix.coeff(1,1) * invdet;
   result.coeffRef(1,0) = -matrix.coeff(1,0) * invdet;
   result.coeffRef(0,1) = -matrix.coeff(0,1) * invdet;
-  result.coeffRef(1,1) = matrix.coeff(0,0) * invdet;
+  result.coeffRef(1,1) =  matrix.coeff(0,0) * invdet;
 }
 
 template<typename MatrixType, typename ResultType>
@@ -279,6 +285,7 @@ struct compute_inverse_and_det_with_check<MatrixType, ResultType, 4>
 *** MatrixBase methods ***
 *************************/
 
+#ifndef EIGEN_TEST_EVALUATORS
 template<typename MatrixType>
 struct traits<inverse_impl<MatrixType> >
 {
@@ -313,8 +320,39 @@ struct inverse_impl : public ReturnByValue<inverse_impl<MatrixType> >
     compute_inverse<MatrixTypeNestedCleaned, Dest>::run(m_matrix, dst);
   }
 };
-
+#endif
 } // end namespace internal
+
+#ifdef EIGEN_TEST_EVALUATORS
+
+namespace internal {
+
+// Specialization for "dense = dense_xpr.inverse()"
+template<typename DstXprType, typename XprType, typename Scalar>
+struct Assignment<DstXprType, Inverse<XprType>, internal::assign_op<Scalar>, Dense2Dense, Scalar>
+{
+  typedef Inverse<XprType> SrcXprType;
+  static void run(DstXprType &dst, const SrcXprType &src, const internal::assign_op<Scalar> &)
+  {
+    // FIXME shall we resize dst here?
+    const int Size = EIGEN_PLAIN_ENUM_MIN(XprType::ColsAtCompileTime,DstXprType::ColsAtCompileTime);
+    EIGEN_ONLY_USED_FOR_DEBUG(Size);
+    eigen_assert(( (Size<=1) || (Size>4) || (extract_data(src.nestedExpression())!=extract_data(dst)))
+              && "Aliasing problem detected in inverse(), you need to do inverse().eval() here.");
+
+    typedef typename internal::nested_eval<XprType,XprType::ColsAtCompileTime>::type  ActualXprType;
+    typedef typename internal::remove_all<ActualXprType>::type                        ActualXprTypeCleanded;
+    
+    ActualXprType actual_xpr(src.nestedExpression());
+    
+    compute_inverse<ActualXprTypeCleanded, DstXprType>::run(actual_xpr, dst);
+  }
+};
+
+  
+} // end namespace internal
+
+#endif
 
 /** \lu_module
   *
@@ -333,6 +371,15 @@ struct inverse_impl : public ReturnByValue<inverse_impl<MatrixType> >
   *
   * \sa computeInverseAndDetWithCheck()
   */
+#ifdef EIGEN_TEST_EVALUATORS
+template<typename Derived>
+inline const Inverse<Derived> MatrixBase<Derived>::inverse() const
+{
+  EIGEN_STATIC_ASSERT(!NumTraits<Scalar>::IsInteger,THIS_FUNCTION_IS_NOT_FOR_INTEGER_NUMERIC_TYPES)
+  eigen_assert(rows() == cols());
+  return Inverse<Derived>(derived());
+}
+#else
 template<typename Derived>
 inline const internal::inverse_impl<Derived> MatrixBase<Derived>::inverse() const
 {
@@ -340,6 +387,7 @@ inline const internal::inverse_impl<Derived> MatrixBase<Derived>::inverse() cons
   eigen_assert(rows() == cols());
   return internal::inverse_impl<Derived>(derived());
 }
+#endif
 
 /** \lu_module
   *
@@ -374,7 +422,11 @@ inline void MatrixBase<Derived>::computeInverseAndDetWithCheck(
   // for larger sizes, evaluating has negligible cost and limits code size.
   typedef typename internal::conditional<
     RowsAtCompileTime == 2,
+#ifndef EIGEN_TEST_EVALUATORS
     typename internal::remove_all<typename internal::nested<Derived, 2>::type>::type,
+#else
+    typename internal::remove_all<typename internal::nested_eval<Derived, 2>::type>::type,
+#endif
     PlainObject
   >::type MatrixType;
   internal::compute_inverse_and_det_with_check<MatrixType, ResultType>::run
@@ -414,4 +466,4 @@ inline void MatrixBase<Derived>::computeInverseWithCheck(
 
 } // end namespace Eigen
 
-#endif // EIGEN_INVERSE_H
+#endif // EIGEN_INVERSE_IMPL_H

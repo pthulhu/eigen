@@ -13,8 +13,9 @@
 
 namespace Eigen { 
 
+#ifndef EIGEN_TEST_EVALUATORS
 namespace internal {
-
+  
 /*********************************************************************************
 *  Coefficient based product implementation.
 *  It is designed for the following use cases:
@@ -41,16 +42,15 @@ struct traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
   typedef typename remove_all<LhsNested>::type _LhsNested;
   typedef typename remove_all<RhsNested>::type _RhsNested;
   typedef typename scalar_product_traits<typename _LhsNested::Scalar, typename _RhsNested::Scalar>::ReturnType Scalar;
-  typedef typename promote_storage_type<typename traits<_LhsNested>::StorageKind,
-                                           typename traits<_RhsNested>::StorageKind>::ret StorageKind;
+  typedef typename product_promote_storage_type<typename traits<_LhsNested>::StorageKind,
+                                                typename traits<_RhsNested>::StorageKind,
+                                                0>::ret StorageKind;
   typedef typename promote_index_type<typename traits<_LhsNested>::Index,
                                          typename traits<_RhsNested>::Index>::type Index;
 
   enum {
-      LhsCoeffReadCost = _LhsNested::CoeffReadCost,
-      RhsCoeffReadCost = _RhsNested::CoeffReadCost,
-      LhsFlags = _LhsNested::Flags,
-      RhsFlags = _RhsNested::Flags,
+      LhsFlags = traits<_LhsNested>::Flags,
+      RhsFlags = traits<_RhsNested>::Flags,
 
       RowsAtCompileTime = _LhsNested::RowsAtCompileTime,
       ColsAtCompileTime = _RhsNested::ColsAtCompileTime,
@@ -89,11 +89,13 @@ struct traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
             | (CanVectorizeRhs ? (RhsFlags & AlignedBit) : 0)
             // TODO enable vectorization for mixed types
             | (SameType && (CanVectorizeLhs || CanVectorizeRhs) ? PacketAccessBit : 0),
-
-      CoeffReadCost = InnerSize == Dynamic ? Dynamic
+#ifndef EIGEN_TEST_EVALUATORS
+      LhsCoeffReadCost = traits<_LhsNested>::CoeffReadCost,
+      RhsCoeffReadCost = traits<_RhsNested>::CoeffReadCost,
+      CoeffReadCost = (InnerSize == Dynamic || LhsCoeffReadCost==Dynamic || RhsCoeffReadCost==Dynamic || NumTraits<Scalar>::AddCost==Dynamic || NumTraits<Scalar>::MulCost==Dynamic) ? Dynamic
                     : InnerSize * (NumTraits<Scalar>::MulCost + LhsCoeffReadCost + RhsCoeffReadCost)
                       + (InnerSize - 1) * NumTraits<Scalar>::AddCost,
-
+#endif
       /* CanVectorizeInner deserves special explanation. It does not affect the product flags. It is not used outside
       * of Product. If the Product itself is not a packet-access expression, there is still a chance that the inner
       * loop of the product might be vectorized. This is the meaning of CanVectorizeInner. Since it doesn't affect
@@ -109,6 +111,8 @@ struct traits<CoeffBasedProduct<LhsNested,RhsNested,NestingFlags> >
 };
 
 } // end namespace internal
+
+#ifndef EIGEN_TEST_EVALUATORS
 
 template<typename LhsNested, typename RhsNested, int NestingFlags>
 class CoeffBasedProduct
@@ -446,6 +450,10 @@ struct product_packet_impl<ColMajor, Dynamic, Lhs, Rhs, Packet, LoadMode>
 };
 
 } // end namespace internal
+
+#endif // EIGEN_TEST_EVALUATORS
+
+#endif // <EIGEN_TEST_EVALUATORS
 
 } // end namespace Eigen
 

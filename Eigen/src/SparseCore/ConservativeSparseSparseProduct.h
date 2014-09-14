@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008-2011 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2008-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -38,6 +38,11 @@ static void conservative_sparse_sparse_product_impl(const Lhs& lhs, const Rhs& r
   // per column of the lhs.
   // Therefore, we have nnz(lhs*rhs) = nnz(lhs) + nnz(rhs)
   Index estimated_nnz_prod = lhs.nonZeros() + rhs.nonZeros();
+  
+#ifdef EIGEN_TEST_EVALUATORS
+  typename evaluator<Lhs>::type lhsEval(lhs);
+  typename evaluator<Rhs>::type rhsEval(rhs);
+#endif
 
   res.setZero();
   res.reserve(Index(estimated_nnz_prod));
@@ -47,11 +52,19 @@ static void conservative_sparse_sparse_product_impl(const Lhs& lhs, const Rhs& r
 
     res.startVec(j);
     Index nnz = 0;
+#ifndef EIGEN_TEST_EVALUATORS
     for (typename Rhs::InnerIterator rhsIt(rhs, j); rhsIt; ++rhsIt)
+#else
+    for (typename evaluator<Rhs>::InnerIterator rhsIt(rhsEval, j); rhsIt; ++rhsIt)
+#endif
     {
       Scalar y = rhsIt.value();
       Index k = rhsIt.index();
+#ifndef EIGEN_TEST_EVALUATORS
       for (typename Lhs::InnerIterator lhsIt(lhs, k); lhsIt; ++lhsIt)
+#else
+      for (typename evaluator<Lhs>::InnerIterator lhsIt(lhsEval, k); lhsIt; ++lhsIt)
+#endif
       {
         Index i = lhsIt.index();
         Scalar x = lhsIt.value();

@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008-2009 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2008-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 // Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla
@@ -56,8 +56,9 @@ struct traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >
                        typename Rhs::Scalar
                      )
                    >::type Scalar;
-  typedef typename promote_storage_type<typename traits<Lhs>::StorageKind,
-                                           typename traits<Rhs>::StorageKind>::ret StorageKind;
+  typedef typename cwise_promote_storage_type<typename traits<Lhs>::StorageKind,
+                                              typename traits<Rhs>::StorageKind,
+                                              BinaryOp>::ret StorageKind;
   typedef typename promote_index_type<typename traits<Lhs>::Index,
                                          typename traits<Rhs>::Index>::type Index;
   typedef typename Lhs::Nested LhsNested;
@@ -65,8 +66,7 @@ struct traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >
   typedef typename remove_reference<LhsNested>::type _LhsNested;
   typedef typename remove_reference<RhsNested>::type _RhsNested;
   enum {
-    LhsCoeffReadCost = _LhsNested::CoeffReadCost,
-    RhsCoeffReadCost = _RhsNested::CoeffReadCost,
+#ifndef EIGEN_TEST_EVALUATORS
     LhsFlags = _LhsNested::Flags,
     RhsFlags = _RhsNested::Flags,
     SameType = is_same<typename _LhsNested::Scalar,typename _RhsNested::Scalar>::value,
@@ -81,44 +81,42 @@ struct traits<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >
         )
      ),
     Flags = (Flags0 & ~RowMajorBit) | (LhsFlags & RowMajorBit),
+    
+    LhsCoeffReadCost = _LhsNested::CoeffReadCost,
+    RhsCoeffReadCost = _RhsNested::CoeffReadCost,
     CoeffReadCost = LhsCoeffReadCost + RhsCoeffReadCost + functor_traits<BinaryOp>::Cost
+#else
+    Flags = _LhsNested::Flags & RowMajorBit
+#endif
   };
 };
 } // end namespace internal
 
-// we require Lhs and Rhs to have the same scalar type. Currently there is no example of a binary functor
-// that would take two operands of different types. If there were such an example, then this check should be
-// moved to the BinaryOp functors, on a per-case basis. This would however require a change in the BinaryOp functors, as
-// currently they take only one typename Scalar template parameter.
-// It is tempting to always allow mixing different types but remember that this is often impossible in the vectorized paths.
-// So allowing mixing different types gives very unexpected errors when enabling vectorization, when the user tries to
-// add together a float matrix and a double matrix.
-#define EIGEN_CHECK_BINARY_COMPATIBILIY(BINOP,LHS,RHS) \
-  EIGEN_STATIC_ASSERT((internal::functor_is_product_like<BINOP>::ret \
-                        ? int(internal::scalar_product_traits<LHS, RHS>::Defined) \
-                        : int(internal::is_same<LHS, RHS>::value)), \
-    YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
-
 template<typename BinaryOp, typename Lhs, typename Rhs, typename StorageKind>
 class CwiseBinaryOpImpl;
 
-template<typename BinaryOp, typename Lhs, typename Rhs>
+template<typename BinaryOp, typename LhsType, typename RhsType>
 class CwiseBinaryOp : internal::no_assignment_operator,
   public CwiseBinaryOpImpl<
-          BinaryOp, Lhs, Rhs,
-          typename internal::promote_storage_type<typename internal::traits<Lhs>::StorageKind,
-                                           typename internal::traits<Rhs>::StorageKind>::ret>
+          BinaryOp, LhsType, RhsType,
+          typename internal::cwise_promote_storage_type<typename internal::traits<LhsType>::StorageKind,
+                                                        typename internal::traits<RhsType>::StorageKind,
+                                                        BinaryOp>::ret>
 {
   public:
+    
+    typedef typename internal::remove_all<LhsType>::type Lhs;
+    typedef typename internal::remove_all<RhsType>::type Rhs;
 
     typedef typename CwiseBinaryOpImpl<
-        BinaryOp, Lhs, Rhs,
-        typename internal::promote_storage_type<typename internal::traits<Lhs>::StorageKind,
-                                         typename internal::traits<Rhs>::StorageKind>::ret>::Base Base;
+        BinaryOp, LhsType, RhsType,
+        typename internal::cwise_promote_storage_type<typename internal::traits<LhsType>::StorageKind,
+                                                      typename internal::traits<Rhs>::StorageKind,
+                                                      BinaryOp>::ret>::Base Base;
     EIGEN_GENERIC_PUBLIC_INTERFACE(CwiseBinaryOp)
 
-    typedef typename internal::nested<Lhs>::type LhsNested;
-    typedef typename internal::nested<Rhs>::type RhsNested;
+    typedef typename internal::nested<LhsType>::type LhsNested;
+    typedef typename internal::nested<RhsType>::type RhsNested;
     typedef typename internal::remove_reference<LhsNested>::type _LhsNested;
     typedef typename internal::remove_reference<RhsNested>::type _RhsNested;
 
@@ -165,6 +163,7 @@ class CwiseBinaryOp : internal::no_assignment_operator,
     const BinaryOp m_functor;
 };
 
+#ifndef EIGEN_TEST_EVALUATORS
 template<typename BinaryOp, typename Lhs, typename Rhs>
 class CwiseBinaryOpImpl<BinaryOp, Lhs, Rhs, Dense>
   : public internal::dense_xpr_base<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >::type
@@ -203,6 +202,16 @@ class CwiseBinaryOpImpl<BinaryOp, Lhs, Rhs, Dense>
                                           derived().rhs().template packet<LoadMode>(index));
     }
 };
+#else
+// Generic API dispatcher
+template<typename BinaryOp, typename Lhs, typename Rhs, typename StorageKind>
+class CwiseBinaryOpImpl
+  : public internal::generic_xpr_base<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >::type
+{
+public:
+  typedef typename internal::generic_xpr_base<CwiseBinaryOp<BinaryOp, Lhs, Rhs> >::type Base;
+};
+#endif
 
 /** replaces \c *this by \c *this - \a other.
   *
@@ -213,8 +222,12 @@ template<typename OtherDerived>
 EIGEN_STRONG_INLINE Derived &
 MatrixBase<Derived>::operator-=(const MatrixBase<OtherDerived> &other)
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  call_assignment(derived(), other.derived(), internal::sub_assign_op<Scalar>());
+#else
   SelfCwiseBinaryOp<internal::scalar_difference_op<Scalar>, Derived, OtherDerived> tmp(derived());
   tmp = other.derived();
+#endif
   return derived();
 }
 
@@ -227,8 +240,12 @@ template<typename OtherDerived>
 EIGEN_STRONG_INLINE Derived &
 MatrixBase<Derived>::operator+=(const MatrixBase<OtherDerived>& other)
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  call_assignment(derived(), other.derived(), internal::add_assign_op<Scalar>());
+#else
   SelfCwiseBinaryOp<internal::scalar_sum_op<Scalar>, Derived, OtherDerived> tmp(derived());
   tmp = other.derived();
+#endif
   return derived();
 }
 

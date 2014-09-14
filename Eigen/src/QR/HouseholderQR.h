@@ -117,6 +117,15 @@ template<typename _MatrixType> class HouseholderQR
       * Example: \include HouseholderQR_solve.cpp
       * Output: \verbinclude HouseholderQR_solve.out
       */
+#ifdef EIGEN_TEST_EVALUATORS
+    template<typename Rhs>
+    inline const Solve<HouseholderQR, Rhs>
+    solve(const MatrixBase<Rhs>& b) const
+    {
+      eigen_assert(m_isInitialized && "HouseholderQR is not initialized.");
+      return Solve<HouseholderQR, Rhs>(*this, b.derived());
+    }
+#else
     template<typename Rhs>
     inline const internal::solve_retval<HouseholderQR, Rhs>
     solve(const MatrixBase<Rhs>& b) const
@@ -124,6 +133,7 @@ template<typename _MatrixType> class HouseholderQR
       eigen_assert(m_isInitialized && "HouseholderQR is not initialized.");
       return internal::solve_retval<HouseholderQR, Rhs>(*this, b.derived());
     }
+#endif
 
     /** This method returns an expression of the unitary matrix Q as a sequence of Householder transformations.
       *
@@ -187,6 +197,12 @@ template<typename _MatrixType> class HouseholderQR
       * For advanced uses only.
       */
     const HCoeffsType& hCoeffs() const { return m_hCoeffs; }
+    
+    #ifndef EIGEN_PARSED_BY_DOXYGEN
+    template<typename RhsType, typename DstType>
+    EIGEN_DEVICE_FUNC
+    void _solve_impl(const RhsType &rhs, DstType &dst) const;
+    #endif
 
   protected:
     MatrixType m_qr;
@@ -283,8 +299,8 @@ struct householder_qr_inplace_blocked
     for (k = 0; k < size; k += blockSize)
     {
       Index bs = (std::min)(size-k,blockSize);  // actual size of the block
-      Index tcols = cols - k - bs;            // trailing columns
-      Index brows = rows-k;                   // rows of the block
+      Index tcols = cols - k - bs;              // trailing columns
+      Index brows = rows-k;                     // rows of the block
 
       // partition the matrix:
       //        A00 | A01 | A02
@@ -302,11 +318,41 @@ struct householder_qr_inplace_blocked
       if(tcols)
       {
         BlockType A21_22 = mat.block(k,k+bs,brows,tcols);
-        apply_block_householder_on_the_left(A21_22,A11_21,hCoeffsSegment.adjoint());
+        apply_block_householder_on_the_left(A21_22,A11_21,hCoeffsSegment, false); // false == backward
       }
     }
   }
 };
+
+} // end namespace internal
+
+#ifndef EIGEN_PARSED_BY_DOXYGEN
+template<typename _MatrixType>
+template<typename RhsType, typename DstType>
+void HouseholderQR<_MatrixType>::_solve_impl(const RhsType &rhs, DstType &dst) const
+{
+  const Index rank = (std::min)(rows(), cols());
+  eigen_assert(rhs.rows() == rows());
+
+  typename RhsType::PlainObject c(rhs);
+
+  // Note that the matrix Q = H_0^* H_1^*... so its inverse is Q^* = (H_0 H_1 ...)^T
+  c.applyOnTheLeft(householderSequence(
+    m_qr.leftCols(rank),
+    m_hCoeffs.head(rank)).transpose()
+  );
+
+  m_qr.topLeftCorner(rank, rank)
+      .template triangularView<Upper>()
+      .solveInPlace(c.topRows(rank));
+
+  dst.topRows(rank) = c.topRows(rank);
+  dst.bottomRows(cols()-rank).setZero();
+}
+#endif
+
+#ifndef EIGEN_TEST_EVALUATORS
+namespace internal {
 
 template<typename _MatrixType, typename Rhs>
 struct solve_retval<HouseholderQR<_MatrixType>, Rhs>
@@ -316,29 +362,12 @@ struct solve_retval<HouseholderQR<_MatrixType>, Rhs>
 
   template<typename Dest> void evalTo(Dest& dst) const
   {
-    const Index rows = dec().rows(), cols = dec().cols();
-    const Index rank = (std::min)(rows, cols);
-    eigen_assert(rhs().rows() == rows);
-
-    typename Rhs::PlainObject c(rhs());
-
-    // Note that the matrix Q = H_0^* H_1^*... so its inverse is Q^* = (H_0 H_1 ...)^T
-    c.applyOnTheLeft(householderSequence(
-      dec().matrixQR().leftCols(rank),
-      dec().hCoeffs().head(rank)).transpose()
-    );
-
-    dec().matrixQR()
-       .topLeftCorner(rank, rank)
-       .template triangularView<Upper>()
-       .solveInPlace(c.topRows(rank));
-
-    dst.topRows(rank) = c.topRows(rank);
-    dst.bottomRows(cols-rank).setZero();
+    dec()._solve_impl(rhs(), dst);
   }
 };
 
 } // end namespace internal
+#endif // EIGEN_TEST_EVALUATORS
 
 /** Performs the QR factorization of the given matrix \a matrix. The result of
   * the factorization is stored into \c *this, and a reference to \c *this

@@ -17,10 +17,18 @@ namespace internal {
 template<typename Derived, int UnrollCount>
 struct all_unroller
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  typedef typename Derived::ExpressionTraits Traits;
+  enum {
+    col = (UnrollCount-1) / Traits::RowsAtCompileTime,
+    row = (UnrollCount-1) % Traits::RowsAtCompileTime
+  };
+#else
   enum {
     col = (UnrollCount-1) / Derived::RowsAtCompileTime,
     row = (UnrollCount-1) % Derived::RowsAtCompileTime
   };
+#endif
 
   static inline bool run(const Derived &mat)
   {
@@ -43,11 +51,19 @@ struct all_unroller<Derived, Dynamic>
 template<typename Derived, int UnrollCount>
 struct any_unroller
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  typedef typename Derived::ExpressionTraits Traits;
+  enum {
+    col = (UnrollCount-1) / Traits::RowsAtCompileTime,
+    row = (UnrollCount-1) % Traits::RowsAtCompileTime
+  };
+#else
   enum {
     col = (UnrollCount-1) / Derived::RowsAtCompileTime,
     row = (UnrollCount-1) % Derived::RowsAtCompileTime
   };
-
+#endif
+  
   static inline bool run(const Derived &mat)
   {
     return any_unroller<Derived, UnrollCount-1>::run(mat) || mat.coeff(row, col);
@@ -78,12 +94,32 @@ struct any_unroller<Derived, Dynamic>
 template<typename Derived>
 inline bool DenseBase<Derived>::all() const
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  typedef typename internal::evaluator<Derived>::type Evaluator;
+  enum {
+    unroll = SizeAtCompileTime != Dynamic
+          && Evaluator::CoeffReadCost != Dynamic
+          && NumTraits<Scalar>::AddCost != Dynamic
+          && SizeAtCompileTime * (Evaluator::CoeffReadCost + NumTraits<Scalar>::AddCost) <= EIGEN_UNROLLING_LIMIT
+  };
+  Evaluator evaluator(derived());
+  if(unroll)
+    return internal::all_unroller<Evaluator, unroll ? int(SizeAtCompileTime) : Dynamic>::run(evaluator);
+  else
+  {
+    for(Index j = 0; j < cols(); ++j)
+      for(Index i = 0; i < rows(); ++i)
+        if (!evaluator.coeff(i, j)) return false;
+    return true;
+  }
+#else
   enum {
     unroll = SizeAtCompileTime != Dynamic
           && CoeffReadCost != Dynamic
           && NumTraits<Scalar>::AddCost != Dynamic
           && SizeAtCompileTime * (CoeffReadCost + NumTraits<Scalar>::AddCost) <= EIGEN_UNROLLING_LIMIT
   };
+  
   if(unroll)
     return internal::all_unroller<Derived, unroll ? int(SizeAtCompileTime) : Dynamic>::run(derived());
   else
@@ -93,6 +129,7 @@ inline bool DenseBase<Derived>::all() const
         if (!coeff(i, j)) return false;
     return true;
   }
+#endif
 }
 
 /** \returns true if at least one coefficient is true
@@ -102,6 +139,25 @@ inline bool DenseBase<Derived>::all() const
 template<typename Derived>
 inline bool DenseBase<Derived>::any() const
 {
+#ifdef EIGEN_TEST_EVALUATORS
+  typedef typename internal::evaluator<Derived>::type Evaluator;
+  enum {
+    unroll = SizeAtCompileTime != Dynamic
+          && Evaluator::CoeffReadCost != Dynamic
+          && NumTraits<Scalar>::AddCost != Dynamic
+          && SizeAtCompileTime * (Evaluator::CoeffReadCost + NumTraits<Scalar>::AddCost) <= EIGEN_UNROLLING_LIMIT
+  };
+  Evaluator evaluator(derived());
+  if(unroll)
+    return internal::any_unroller<Evaluator, unroll ? int(SizeAtCompileTime) : Dynamic>::run(evaluator);
+  else
+  {
+    for(Index j = 0; j < cols(); ++j)
+      for(Index i = 0; i < rows(); ++i)
+        if (evaluator.coeff(i, j)) return true;
+    return false;
+  }
+#else
   enum {
     unroll = SizeAtCompileTime != Dynamic
           && CoeffReadCost != Dynamic
@@ -117,6 +173,7 @@ inline bool DenseBase<Derived>::any() const
         if (coeff(i, j)) return true;
     return false;
   }
+#endif
 }
 
 /** \returns the number of coefficients which evaluate to true

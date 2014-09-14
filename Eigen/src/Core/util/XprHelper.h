@@ -125,6 +125,7 @@ template<typename _Scalar, int _Rows, int _Cols,
     typedef Matrix<_Scalar, _Rows, _Cols, Options, _MaxRows, _MaxCols> type;
 };
 
+#ifndef EIGEN_TEST_EVALUATORS
 template<typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
 class compute_matrix_flags
 {
@@ -159,9 +160,65 @@ class compute_matrix_flags
     enum { ret = LinearAccessBit | LvalueBit | DirectAccessBit | NestByRefBit | packet_access_bit | row_major_bit | aligned_bit };
 };
 
+#else // EIGEN_TEST_EVALUATORS
+
+template<typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+class compute_matrix_flags
+{
+    enum { row_major_bit = Options&RowMajor ? RowMajorBit : 0 };
+  public:
+    // FIXME currently we still have to handle DirectAccessBit at the expression level to handle DenseCoeffsBase<>
+    // and then propagate this information to the evaluator's flags.
+    // However, I (Gael) think that DirectAccessBit should only matter at the evaluation stage.
+    enum { ret = DirectAccessBit | LvalueBit | NestByRefBit | row_major_bit };
+};
+#endif
+
+#ifdef EIGEN_ENABLE_EVALUATORS
+template<typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+class compute_matrix_evaluator_flags
+{
+    enum {
+      row_major_bit = Options&RowMajor ? RowMajorBit : 0,
+      is_dynamic_size_storage = MaxRows==Dynamic || MaxCols==Dynamic,
+
+      aligned_bit =
+      (
+            ((Options&DontAlign)==0)
+        && (
+#if EIGEN_ALIGN_STATICALLY
+             ((!is_dynamic_size_storage) && (((MaxCols*MaxRows*int(sizeof(Scalar))) % EIGEN_ALIGN_BYTES) == 0))
+#else
+             0
+#endif
+
+          ||
+
+#if EIGEN_ALIGN
+             is_dynamic_size_storage
+#else
+             0
+#endif
+
+          )
+      ) ? AlignedBit : 0,
+      packet_access_bit = packet_traits<Scalar>::Vectorizable && aligned_bit ? PacketAccessBit : 0
+    };
+
+  public:
+    enum { ret = LinearAccessBit | DirectAccessBit | packet_access_bit | row_major_bit | aligned_bit };
+};
+
+#endif // EIGEN_ENABLE_EVALUATORS
+
 template<int _Rows, int _Cols> struct size_at_compile_time
 {
   enum { ret = (_Rows==Dynamic || _Cols==Dynamic) ? Dynamic : _Rows * _Cols };
+};
+
+template<typename XprType> struct size_of_xpr_at_compile_time
+{
+  enum { ret = size_at_compile_time<traits<XprType>::RowsAtCompileTime,traits<XprType>::ColsAtCompileTime>::ret };
 };
 
 /* plain_matrix_type : the difference from eval is that plain_matrix_type is always a plain matrix type,
@@ -173,6 +230,10 @@ template<typename T, typename BaseClassType> struct plain_matrix_type_dense;
 template<typename T> struct plain_matrix_type<T,Dense>
 {
   typedef typename plain_matrix_type_dense<T,typename traits<T>::XprKind>::type type;
+};
+template<typename T> struct plain_matrix_type<T,DiagonalShape>
+{
+  typedef typename T::PlainObject type;
 };
 
 template<typename T> struct plain_matrix_type_dense<T,MatrixXpr>
@@ -214,6 +275,11 @@ template<typename T> struct eval<T,Dense>
 //                 traits<T>::MaxRowsAtCompileTime,
 //                 traits<T>::MaxColsAtCompileTime
 //           > type;
+};
+
+template<typename T> struct eval<T,DiagonalShape>
+{
+  typedef typename plain_matrix_type<T>::type type;
 };
 
 // for matrices, no need to evaluate, just use a const reference to avoid a useless copy
@@ -294,6 +360,10 @@ struct transfer_constness
   >::type type;
 };
 
+
+
+#ifndef EIGEN_TEST_EVALUATORS
+
 /** \internal Determines how a given expression should be nested into another one.
   * For example, when you do a * (b+c), Eigen will determine how the expression b+c should be
   * nested into the bigger product expression. The choice is between nesting the expression b+c as-is, or
@@ -341,6 +411,50 @@ template<typename T, int n=1, typename PlainObject = typename eval<T>::type> str
   >::type type;
 };
 
+#else
+
+// When using evaluators, we never evaluate when assembling the expression!!
+// TODO: get rid of this nested class since it's just an alias for ref_selector.
+template<typename T, int n=1, typename PlainObject = void> struct nested
+{
+  typedef typename ref_selector<T>::type type;
+};
+
+#endif // EIGEN_TEST_EVALUATORS
+
+#ifdef EIGEN_ENABLE_EVALUATORS
+// However, we still need a mechanism to detect whether an expression which is evaluated multiple time
+// has to be evaluated into a temporary.
+// That's the purpose of this new nested_eval helper: 
+template<typename T, int n, typename PlainObject = typename eval<T>::type> struct nested_eval
+{
+  enum {
+    // For the purpose of this test, to keep it reasonably simple, we arbitrarily choose a value of Dynamic values.
+    // the choice of 10000 makes it larger than any practical fixed value and even most dynamic values.
+    // in extreme cases where these assumptions would be wrong, we would still at worst suffer performance issues
+    // (poor choice of temporaries).
+    // It's important that this value can still be squared without integer overflowing.
+    DynamicAsInteger = 10000,
+    ScalarReadCost = NumTraits<typename traits<T>::Scalar>::ReadCost,
+    ScalarReadCostAsInteger = ScalarReadCost == Dynamic ? int(DynamicAsInteger) : int(ScalarReadCost),
+    CoeffReadCost = evaluator<T>::CoeffReadCost,  // TODO What if an evaluator evaluate itself into a tempory?
+                                                  // Then CoeffReadCost will be small but we still have to evaluate if n>1... 
+                                                  // The solution might be to ask the evaluator if it creates a temp. Perhaps we could even ask the number of temps?
+    CoeffReadCostAsInteger = CoeffReadCost == Dynamic ? int(DynamicAsInteger) : int(CoeffReadCost),
+    NAsInteger = n == Dynamic ? int(DynamicAsInteger) : n,
+    CostEvalAsInteger   = (NAsInteger+1) * ScalarReadCostAsInteger + CoeffReadCostAsInteger,
+    CostNoEvalAsInteger = NAsInteger * CoeffReadCostAsInteger
+  };
+
+  typedef typename conditional<
+        ( (int(evaluator<T>::Flags) & EvalBeforeNestingBit) ||
+          (int(CostEvalAsInteger) < int(CostNoEvalAsInteger)) ),
+        PlainObject,
+        typename ref_selector<T>::type
+  >::type type;
+};
+#endif
+
 template<typename T>
 EIGEN_DEVICE_FUNC
 T* const_cast_ptr(const T* ptr)
@@ -364,6 +478,15 @@ template<typename Derived>
 struct dense_xpr_base<Derived, ArrayXpr>
 {
   typedef ArrayBase<Derived> type;
+};
+
+template<typename Derived, typename XprKind = typename traits<Derived>::XprKind, typename StorageKind = typename traits<Derived>::StorageKind>
+struct generic_xpr_base;
+
+template<typename Derived, typename XprKind>
+struct generic_xpr_base<Derived, XprKind, Dense>
+{
+  typedef typename dense_xpr_base<Derived,XprKind>::type type;
 };
 
 /** \internal Helper base class to add a scalar multiple operator
@@ -409,12 +532,59 @@ template<typename XprType, typename CastType> struct cast_return_type
                               const XprType&,CastType>::type type;
 };
 
-template <typename A, typename B> struct promote_storage_type;
+/** \internal Specify the "storage kind" of applying a coefficient-wise
+  * binary operations between two expressions of kinds A and B respectively.
+  * The template parameter Functor permits to specialize the resulting storage kind wrt to
+  * the functor.
+  * The default rules are as follows:
+  * \code
+  * A     op A      -> A
+  * A     op dense  -> dense
+  * dense op B      -> dense
+  * A     *  dense  -> A
+  * dense *  B      -> B
+  * \endcode
+  */
+template <typename A, typename B, typename Functor> struct cwise_promote_storage_type;
 
-template <typename A> struct promote_storage_type<A,A>
-{
-  typedef A ret;
-};
+template <typename A, typename Functor>                   struct cwise_promote_storage_type<A,A,Functor>                                      { typedef A     ret; };
+template <typename Functor>                               struct cwise_promote_storage_type<Dense,Dense,Functor>                              { typedef Dense ret; };
+template <typename ScalarA, typename ScalarB>             struct cwise_promote_storage_type<Dense,Dense,scalar_product_op<ScalarA,ScalarB> >  { typedef Dense ret; };
+template <typename A, typename Functor>                   struct cwise_promote_storage_type<A,Dense,Functor>                                  { typedef Dense ret; };
+template <typename B, typename Functor>                   struct cwise_promote_storage_type<Dense,B,Functor>                                  { typedef Dense ret; };
+template <typename A, typename ScalarA, typename ScalarB> struct cwise_promote_storage_type<A,Dense,scalar_product_op<ScalarA,ScalarB> >      { typedef A     ret; };
+template <typename B, typename ScalarA, typename ScalarB> struct cwise_promote_storage_type<Dense,B,scalar_product_op<ScalarA,ScalarB> >      { typedef B     ret; };
+
+/** \internal Specify the "storage kind" of multiplying an expression of kind A with kind B.
+  * The template parameter ProductTag permits to specialize the resulting storage kind wrt to
+  * some compile-time properties of the product: GemmProduct, GemvProduct, OuterProduct, InnerProduct.
+  * The default rules are as follows:
+  * \code
+  *  K * K            -> K
+  *  dense * K        -> dense
+  *  K * dense        -> dense
+  *  diag * K         -> K
+  *  K * diag         -> K
+  *  Perm * K         -> K
+  * K * Perm          -> K
+  * \endcode
+  */
+template <typename A, typename B, int ProductTag> struct product_promote_storage_type;
+
+template <typename A, int ProductTag> struct product_promote_storage_type<A,                  A,                  ProductTag> { typedef A     ret;};
+template <int ProductTag>             struct product_promote_storage_type<Dense,              Dense,              ProductTag> { typedef Dense ret;};
+template <typename A, int ProductTag> struct product_promote_storage_type<A,                  Dense,              ProductTag> { typedef Dense ret; };
+template <typename B, int ProductTag> struct product_promote_storage_type<Dense,              B,                  ProductTag> { typedef Dense ret; };
+
+template <typename A, int ProductTag> struct product_promote_storage_type<A,                  DiagonalShape,      ProductTag> { typedef A ret; };
+template <typename B, int ProductTag> struct product_promote_storage_type<DiagonalShape,      B,                  ProductTag> { typedef B ret; };
+template <int ProductTag>             struct product_promote_storage_type<Dense,              DiagonalShape,      ProductTag> { typedef Dense ret; };
+template <int ProductTag>             struct product_promote_storage_type<DiagonalShape,      Dense,              ProductTag> { typedef Dense ret; };
+
+template <typename A, int ProductTag> struct product_promote_storage_type<A,                  PermutationStorage, ProductTag> { typedef A ret; };
+template <typename B, int ProductTag> struct product_promote_storage_type<PermutationStorage, B,                  ProductTag> { typedef B ret; };
+template <int ProductTag>             struct product_promote_storage_type<Dense,              PermutationStorage, ProductTag> { typedef Dense ret; };
+template <int ProductTag>             struct product_promote_storage_type<PermutationStorage, Dense,              ProductTag> { typedef Dense ret; };
 
 /** \internal gives the plain matrix or array type to store a row/column/diagonal of a matrix type.
   * \param Scalar optional parameter allowing to pass a different scalar type than the one of the MatrixType.
@@ -472,8 +642,36 @@ struct is_lvalue
                  bool(traits<ExpressionType>::Flags & LvalueBit) };
 };
 
+template<typename T> struct is_diagonal
+{ enum { ret = false }; };
+
+template<typename T> struct is_diagonal<DiagonalBase<T> >
+{ enum { ret = true }; };
+
+template<typename T> struct is_diagonal<DiagonalWrapper<T> >
+{ enum { ret = true }; };
+
+template<typename T, int S> struct is_diagonal<DiagonalMatrix<T,S> >
+{ enum { ret = true }; };
+
+template<typename S1, typename S2> struct glue_shapes;
+template<> struct glue_shapes<DenseShape,TriangularShape> { typedef TriangularShape type;  };
+
 } // end namespace internal
 
+// we require Lhs and Rhs to have the same scalar type. Currently there is no example of a binary functor
+// that would take two operands of different types. If there were such an example, then this check should be
+// moved to the BinaryOp functors, on a per-case basis. This would however require a change in the BinaryOp functors, as
+// currently they take only one typename Scalar template parameter.
+// It is tempting to always allow mixing different types but remember that this is often impossible in the vectorized paths.
+// So allowing mixing different types gives very unexpected errors when enabling vectorization, when the user tries to
+// add together a float matrix and a double matrix.
+#define EIGEN_CHECK_BINARY_COMPATIBILIY(BINOP,LHS,RHS) \
+  EIGEN_STATIC_ASSERT((internal::functor_is_product_like<BINOP>::ret \
+                        ? int(internal::scalar_product_traits<LHS, RHS>::Defined) \
+                        : int(internal::is_same<LHS, RHS>::value)), \
+    YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
+    
 } // end namespace Eigen
 
 #endif // EIGEN_XPRHELPER_H

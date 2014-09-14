@@ -33,6 +33,7 @@ struct traits<ReturnByValue<Derived> >
   };
 };
 
+#ifndef EIGEN_TEST_EVALUATORS
 /* The ReturnByValue object doesn't even have a coeff() method.
  * So the only way that nesting it in an expression can work, is by evaluating it into a plain matrix.
  * So internal::nested always gives the plain return matrix type.
@@ -44,6 +45,13 @@ struct nested<ReturnByValue<Derived>, n, PlainObject>
 {
   typedef typename traits<Derived>::ReturnType type;
 };
+#else
+template<typename Derived,int n,typename PlainObject>
+struct nested_eval<ReturnByValue<Derived>, n, PlainObject>
+{
+  typedef typename traits<Derived>::ReturnType type;
+};
+#endif
 
 } // end namespace internal
 
@@ -73,6 +81,7 @@ template<typename Derived> class ReturnByValue
     const Unusable& coeff(Index,Index) const { return *reinterpret_cast<const Unusable*>(this); }
     Unusable& coeffRef(Index) { return *reinterpret_cast<Unusable*>(this); }
     Unusable& coeffRef(Index,Index) { return *reinterpret_cast<Unusable*>(this); }
+#undef Unusable
 #endif
 };
 
@@ -83,6 +92,38 @@ Derived& DenseBase<Derived>::operator=(const ReturnByValue<OtherDerived>& other)
   other.evalTo(derived());
   return derived();
 }
+
+#ifdef EIGEN_TEST_EVALUATORS
+namespace internal {
+
+// Expression is evaluated in a temporary; default implementation of Assignment is bypassed so that
+// when a ReturnByValue expression is assigned, the evaluator is not constructed.
+// TODO: Finalize port to new regime; ReturnByValue should not exist in the expression world
+  
+template<typename Derived>
+struct evaluator<ReturnByValue<Derived> >
+  : public evaluator<typename internal::traits<Derived>::ReturnType>::type
+{
+  typedef ReturnByValue<Derived> XprType;
+  typedef typename internal::traits<Derived>::ReturnType PlainObject;
+  typedef typename evaluator<PlainObject>::type Base;
+  
+  typedef evaluator type;
+  typedef evaluator nestedType;
+
+  evaluator(const XprType& xpr) 
+    : m_result(xpr.rows(), xpr.cols())
+  {
+    ::new (static_cast<Base*>(this)) Base(m_result);
+    xpr.evalTo(m_result);
+  }
+
+protected:
+  PlainObject m_result;
+};
+
+} // end namespace internal
+#endif
 
 } // end namespace Eigen
 

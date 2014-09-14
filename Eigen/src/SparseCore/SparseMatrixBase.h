@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008-2011 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2008-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -39,11 +39,7 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     typedef EigenBase<Derived> Base;
     
     template<typename OtherDerived>
-    Derived& operator=(const EigenBase<OtherDerived> &other)
-    {
-      other.derived().evalTo(derived());
-      return derived();
-    }
+    Derived& operator=(const EigenBase<OtherDerived> &other);
 
     enum {
 
@@ -83,10 +79,12 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
           * constructed from this one. See the \ref flags "list of flags".
           */
 
+#ifndef EIGEN_TEST_EVALUATORS
       CoeffReadCost = internal::traits<Derived>::CoeffReadCost,
         /**< This is a rough measure of how expensive it is to read one coefficient from
           * this expression.
           */
+#endif
 
       IsRowMajor = Flags&RowMajorBit ? 1 : 0,
       
@@ -104,9 +102,8 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
                         Transpose<const Derived>
                      >::type AdjointReturnType;
 
-
+    // FIXME storage order do not match evaluator storage order
     typedef SparseMatrix<Scalar, Flags&RowMajorBit ? RowMajor : ColMajor, Index> PlainObject;
-
 
 #ifndef EIGEN_PARSED_BY_DOXYGEN
     /** This is the "real scalar" type; if the \a Scalar type is already real numbers
@@ -175,92 +172,27 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
 
     
     template<typename OtherDerived>
-    Derived& operator=(const ReturnByValue<OtherDerived>& other)
-    {
-      other.evalTo(derived());
-      return derived();
-    }
-
+    Derived& operator=(const ReturnByValue<OtherDerived>& other);
 
     template<typename OtherDerived>
-    inline Derived& operator=(const SparseMatrixBase<OtherDerived>& other)
-    {
-      return assign(other.derived());
-    }
+    inline Derived& operator=(const SparseMatrixBase<OtherDerived>& other);
 
-    inline Derived& operator=(const Derived& other)
-    {
-//       if (other.isRValue())
-//         derived().swap(other.const_cast_derived());
-//       else
-      return assign(other.derived());
-    }
+    inline Derived& operator=(const Derived& other);
 
   protected:
 
     template<typename OtherDerived>
-    inline Derived& assign(const OtherDerived& other)
-    {
-      const bool transpose = (Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit);
-      const Index outerSize = (int(OtherDerived::Flags) & RowMajorBit) ? Index(other.rows()) : Index(other.cols());
-      if ((!transpose) && other.isRValue())
-      {
-        // eval without temporary
-        derived().resize(Index(other.rows()), Index(other.cols()));
-        derived().setZero();
-        derived().reserve((std::max)(this->rows(),this->cols())*2);
-        for (Index j=0; j<outerSize; ++j)
-        {
-          derived().startVec(j);
-          for (typename OtherDerived::InnerIterator it(other, typename OtherDerived::Index(j)); it; ++it)
-          {
-            Scalar v = it.value();
-            derived().insertBackByOuterInner(j,Index(it.index())) = v;
-          }
-        }
-        derived().finalize();
-      }
-      else
-      {
-        assignGeneric(other);
-      }
-      return derived();
-    }
+    inline Derived& assign(const OtherDerived& other);
 
     template<typename OtherDerived>
-    inline void assignGeneric(const OtherDerived& other)
-    {
-      //const bool transpose = (Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit);
-      eigen_assert(( ((internal::traits<Derived>::SupportedAccessPatterns&OuterRandomAccessPattern)==OuterRandomAccessPattern) ||
-                  (!((Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit)))) &&
-                  "the transpose operation is supposed to be handled in SparseMatrix::operator=");
-
-      enum { Flip = (Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit) };
-
-      const Index outerSize = Index(other.outerSize());
-      //typedef typename internal::conditional<transpose, LinkedVectorMatrix<Scalar,Flags&RowMajorBit>, Derived>::type TempType;
-      // thanks to shallow copies, we always eval to a tempary
-      Derived temp(Index(other.rows()), Index(other.cols()));
-
-      temp.reserve((std::max)(this->rows(),this->cols())*2);
-      for (Index j=0; j<outerSize; ++j)
-      {
-        temp.startVec(j);
-        for (typename OtherDerived::InnerIterator it(other.derived(), typename OtherDerived::Index(j)); it; ++it)
-        {
-          Scalar v = it.value();
-          temp.insertBackByOuterInner(Flip?Index(it.index()):j,Flip?j:Index(it.index())) = v;
-        }
-      }
-      temp.finalize();
-
-      derived() = temp.markAsRValue();
-    }
+    inline void assignGeneric(const OtherDerived& other);
 
   public:
 
+#ifndef EIGEN_TEST_EVALUATORS
     template<typename Lhs, typename Rhs>
     inline Derived& operator=(const SparseSparseProduct<Lhs,Rhs>& product);
+#endif
 
     friend std::ostream & operator << (std::ostream & s, const SparseMatrixBase& m)
     {
@@ -333,11 +265,12 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     EIGEN_STRONG_INLINE const EIGEN_SPARSE_CWISE_PRODUCT_RETURN_TYPE
     cwiseProduct(const MatrixBase<OtherDerived> &other) const;
 
+#ifndef EIGEN_TEST_EVALUATORS
     // sparse * sparse
     template<typename OtherDerived>
     const typename SparseSparseProductReturnType<Derived,OtherDerived>::Type
     operator*(const SparseMatrixBase<OtherDerived> &other) const;
-
+    
     // sparse * diagonal
     template<typename OtherDerived>
     const SparseDiagonalProduct<Derived,OtherDerived>
@@ -348,7 +281,7 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     const SparseDiagonalProduct<OtherDerived,Derived>
     operator*(const DiagonalBase<OtherDerived> &lhs, const SparseMatrixBase& rhs)
     { return SparseDiagonalProduct<OtherDerived,Derived>(lhs.derived(), rhs.derived()); }
-
+    
     /** dense * sparse (return a dense object unless it is an outer product) */
     template<typename OtherDerived> friend
     const typename DenseSparseProductReturnType<OtherDerived,Derived>::Type
@@ -361,6 +294,37 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     operator*(const MatrixBase<OtherDerived> &other) const
     { return typename SparseDenseProductReturnType<Derived,OtherDerived>::Type(derived(), other.derived()); }
     
+#else // EIGEN_TEST_EVALUATORS
+    // sparse * diagonal
+    template<typename OtherDerived>
+    const Product<Derived,OtherDerived>
+    operator*(const DiagonalBase<OtherDerived> &other) const
+    { return Product<Derived,OtherDerived>(derived(), other.derived()); }
+
+    // diagonal * sparse
+    template<typename OtherDerived> friend
+    const Product<OtherDerived,Derived>
+    operator*(const DiagonalBase<OtherDerived> &lhs, const SparseMatrixBase& rhs)
+    { return Product<OtherDerived,Derived>(lhs.derived(), rhs.derived()); }
+    
+    // sparse * sparse
+    template<typename OtherDerived>
+    const Product<Derived,OtherDerived>
+    operator*(const SparseMatrixBase<OtherDerived> &other) const;
+    
+    // sparse * dense
+    template<typename OtherDerived>
+    const Product<Derived,OtherDerived>
+    operator*(const MatrixBase<OtherDerived> &other) const
+    { return Product<Derived,OtherDerived>(derived(), other.derived()); }
+    
+    // dense * sparse
+    template<typename OtherDerived> friend
+    const Product<OtherDerived,Derived>
+    operator*(const MatrixBase<OtherDerived> &lhs, const SparseMatrixBase& rhs)
+    { return Product<OtherDerived,Derived>(lhs.derived(), rhs.derived()); }
+#endif // EIGEN_TEST_EVALUATORS
+    
      /** \returns an expression of P H P^-1 where H is the matrix represented by \c *this */
     SparseSymmetricPermutationProduct<Derived,Upper|Lower> twistedBy(const PermutationMatrix<Dynamic,Dynamic,Index>& perm) const
     {
@@ -371,7 +335,7 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     Derived& operator*=(const SparseMatrixBase<OtherDerived>& other);
 
     template<int Mode>
-    inline const SparseTriangularView<Derived, Mode> triangularView() const;
+    inline const TriangularView<Derived, Mode> triangularView() const;
 
     template<unsigned int UpLo> inline const SparseSelfAdjointView<Derived, UpLo> selfadjointView() const;
     template<unsigned int UpLo> inline SparseSelfAdjointView<Derived, UpLo> selfadjointView();
@@ -396,6 +360,7 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     Block<Derived,Dynamic,Dynamic,true> innerVectors(Index outerStart, Index outerSize);
     const Block<const Derived,Dynamic,Dynamic,true> innerVectors(Index outerStart, Index outerSize) const;
 
+#ifndef EIGEN_TEST_EVALUATORS
     /** \internal use operator= */
     template<typename DenseDerived>
     void evalTo(MatrixBase<DenseDerived>& dst) const
@@ -405,6 +370,7 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
         for (typename Derived::InnerIterator i(derived(),typename Derived::Index(j)); i; ++i)
           dst.coeffRef(i.row(),i.col()) = i.value();
     }
+#endif
 
     Matrix<Scalar,RowsAtCompileTime,ColsAtCompileTime> toDense() const
     {
@@ -430,6 +396,9 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     { return typename internal::eval<Derived>::type(derived()); }
 
     Scalar sum() const;
+    
+    inline const SparseView<Derived>
+    pruned(const Scalar& reference = Scalar(0), const RealScalar& epsilon = NumTraits<Scalar>::dummy_precision()) const;
 
   protected:
 

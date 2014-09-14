@@ -128,7 +128,11 @@ class PlainObjectBase : public internal::dense_xpr_base<Derived>::type
     DenseStorage<Scalar, Base::MaxSizeAtCompileTime, Base::RowsAtCompileTime, Base::ColsAtCompileTime, Options> m_storage;
 
   public:
+#ifndef EIGEN_TEST_EVALUATORS
     enum { NeedsToAlign = SizeAtCompileTime != Dynamic && (internal::traits<Derived>::Flags & AlignedBit) != 0 };
+#else
+    enum { NeedsToAlign = SizeAtCompileTime != Dynamic && (internal::traits<Derived>::EvaluatorFlags & AlignedBit) != 0 };
+#endif
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF(NeedsToAlign)
 
     EIGEN_DEVICE_FUNC
@@ -639,6 +643,18 @@ class PlainObjectBase : public internal::dense_xpr_base<Derived>::type
       *
       * \internal
       */
+#ifdef EIGEN_TEST_EVALUATORS
+    // aliasing is dealt once in internall::call_assignment
+    // so at this stage we have to assume aliasing... and resising has to be done later.
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC 
+    EIGEN_STRONG_INLINE Derived& _set(const DenseBase<OtherDerived>& other)
+    {
+      internal::call_assignment(this->derived(), other.derived());
+      return this->derived();
+      return this->derived();
+    }
+#else
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC 
     EIGEN_STRONG_INLINE Derived& _set(const DenseBase<OtherDerived>& other)
@@ -654,7 +670,7 @@ class PlainObjectBase : public internal::dense_xpr_base<Derived>::type
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC 
     EIGEN_STRONG_INLINE void _set_selector(const OtherDerived& other, const internal::false_type&) { _set_noalias(other); }
-
+#endif
     /** \internal Like _set() but additionally makes the assumption that no aliasing effect can happen (which
       * is the case when creating a new matrix) so one can enforce lazy evaluation.
       *
@@ -669,7 +685,12 @@ class PlainObjectBase : public internal::dense_xpr_base<Derived>::type
       //_resize_to_match(other);
       // the 'false' below means to enforce lazy evaluation. We don't use lazyAssign() because
       // it wouldn't allow to copy a row-vector into a column-vector.
+#ifdef EIGEN_TEST_EVALUATORS
+      internal::call_assignment_no_alias(this->derived(), other.derived(), internal::assign_op<Scalar>());
+      return this->derived();
+#else
       return internal::assign_selector<Derived,OtherDerived,false>::run(this->derived(), other.derived());
+#endif
     }
 
     template<typename T0, typename T1>
