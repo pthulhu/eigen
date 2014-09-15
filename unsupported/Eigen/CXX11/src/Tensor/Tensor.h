@@ -55,70 +55,44 @@ namespace Eigen {
   * change dramatically.</dd>
   * </dl>
   *
-  * \ref TopicStorageOrders 
+  * \ref TopicStorageOrders
   */
-template<typename Scalar_, std::size_t NumIndices_, int Options_ = 0>
-class Tensor;
-
-namespace internal {
-template<typename Scalar_, std::size_t NumIndices_, int Options_>
-struct traits<Tensor<Scalar_, NumIndices_, Options_>>
-{
-  typedef Scalar_ Scalar;
-  typedef Dense StorageKind;
-  typedef DenseIndex Index;
-  enum {
-    Options = Options_
-  };
-};
-
-template<typename Index, std::size_t NumIndices, std::size_t n, bool RowMajor>
-struct tensor_index_linearization_helper
-{
-  constexpr static inline Index run(std::array<Index, NumIndices> const& indices, std::array<Index, NumIndices> const& dimensions)
-  {
-    return std_array_get<RowMajor ? n : (NumIndices - n - 1)>(indices) + 
-      std_array_get<RowMajor ? n : (NumIndices - n - 1)>(dimensions) *
-        tensor_index_linearization_helper<Index, NumIndices, n - 1, RowMajor>::run(indices, dimensions);
-  }
-};
-
-template<typename Index, std::size_t NumIndices, bool RowMajor>
-struct tensor_index_linearization_helper<Index, NumIndices, 0, RowMajor>
-{
-  constexpr static inline Index run(std::array<Index, NumIndices> const& indices, std::array<Index, NumIndices> const&)
-  {
-    return std_array_get<RowMajor ? 0 : NumIndices - 1>(indices);
-  }
-};
-} // end namespace internal
 
 template<typename Scalar_, std::size_t NumIndices_, int Options_>
-class Tensor
+class Tensor : public TensorBase<Tensor<Scalar_, NumIndices_, Options_> >
 {
-    static_assert(NumIndices_ >= 1, "A tensor must have at least one index.");
-  
   public:
     typedef Tensor<Scalar_, NumIndices_, Options_> Self;
+    typedef TensorBase<Tensor<Scalar_, NumIndices_, Options_> > Base;
+    typedef typename Eigen::internal::nested<Self>::type Nested;
     typedef typename internal::traits<Self>::StorageKind StorageKind;
     typedef typename internal::traits<Self>::Index Index;
-    typedef typename internal::traits<Self>::Scalar Scalar;
-    typedef typename internal::packet_traits<Scalar>::type PacketScalar;
+    typedef Scalar_ Scalar;
+    typedef typename internal::packet_traits<Scalar>::type Packet;
     typedef typename NumTraits<Scalar>::Real RealScalar;
-    typedef Self DenseType;
+    typedef typename Base::CoeffReturnType CoeffReturnType;
+    typedef typename Base::PacketReturnType PacketReturnType;
 
-    constexpr static int Options = Options_;
-    constexpr static std::size_t NumIndices = NumIndices_;
+    enum {
+      IsAligned = bool(EIGEN_ALIGN) & !(Options_&DontAlign),
+      PacketAccess = (internal::packet_traits<Scalar>::size > 1),
+    };
+
+    static const int Options = Options_;
+
+    static const std::size_t NumIndices = NumIndices_;
+
+  typedef DSizes<DenseIndex, NumIndices_> Dimensions;
 
   protected:
     TensorStorage<Scalar, NumIndices, Dynamic, Options> m_storage;
 
   public:
-    EIGEN_STRONG_INLINE Index                         dimension(std::size_t n) const { return m_storage.dimensions()[n]; }
-    EIGEN_STRONG_INLINE std::array<Index, NumIndices> dimensions()             const { return m_storage.dimensions(); }
-    EIGEN_STRONG_INLINE Index                         size()                   const { return internal::array_prod(m_storage.dimensions()); }
-    EIGEN_STRONG_INLINE Scalar                        *data()                        { return m_storage.data(); }
-    EIGEN_STRONG_INLINE const Scalar                  *data()                  const { return m_storage.data(); }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                         dimension(std::size_t n) const { return m_storage.dimensions()[n]; }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const DSizes<DenseIndex, NumIndices_>& dimensions()    const { return m_storage.dimensions(); }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                         size()                   const { return m_storage.size(); }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar                        *data()                        { return m_storage.data(); }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar                  *data()                  const { return m_storage.data(); }
 
     // This makes EIGEN_INITIALIZE_COEFFS_IF_THAT_OPTION_IS_ENABLED
     // work, because that uses base().coeffRef() - and we don't yet
@@ -126,146 +100,186 @@ class Tensor
     inline Self& base()             { return *this; }
     inline const Self& base() const { return *this; }
 
-    void setZero()
-    {
-      // FIXME: until we have implemented packet access and the
-      //        expression engine w.r.t. nullary ops, use this
-      //        as a kludge. Only works with POD types, but for
-      //        any standard usage, this shouldn't be a problem
-      memset((void *)data(), 0, size() * sizeof(Scalar));
-    }
-
-    inline Self& operator=(Self const& other)
-    {
-      m_storage = other.m_storage;
-      return *this;
-    }
-
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     inline const Scalar& coeff(Index firstIndex, Index secondIndex, IndexTypes... otherIndices) const
     {
-      static_assert(sizeof...(otherIndices) + 2 == NumIndices, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
-      return coeff(std::array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
+      // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 2 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
+      return coeff(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
     }
+#endif
 
-    inline const Scalar& coeff(const std::array<Index, NumIndices>& indices) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& coeff(const array<Index, NumIndices>& indices) const
     {
       eigen_internal_assert(checkIndexRange(indices));
       return m_storage.data()[linearizedIndex(indices)];
     }
 
-    inline const Scalar& coeff(Index index) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& coeff(Index index) const
     {
       eigen_internal_assert(index >= 0 && index < size());
       return m_storage.data()[index];
     }
 
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     inline Scalar& coeffRef(Index firstIndex, Index secondIndex, IndexTypes... otherIndices)
     {
-      static_assert(sizeof...(otherIndices) + 2 == NumIndices, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
-      return coeffRef(std::array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
+      // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 2 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
+      return coeffRef(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
     }
+#endif
 
-    inline Scalar& coeffRef(const std::array<Index, NumIndices>& indices)
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& coeffRef(const array<Index, NumIndices>& indices)
     {
       eigen_internal_assert(checkIndexRange(indices));
       return m_storage.data()[linearizedIndex(indices)];
     }
 
-    inline Scalar& coeffRef(Index index)
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& coeffRef(Index index)
     {
       eigen_internal_assert(index >= 0 && index < size());
       return m_storage.data()[index];
     }
 
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     inline const Scalar& operator()(Index firstIndex, Index secondIndex, IndexTypes... otherIndices) const
     {
-      static_assert(sizeof...(otherIndices) + 2 == NumIndices, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
-      return this->operator()(std::array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
+      // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 2 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
+      return this->operator()(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
     }
+#endif
 
-    inline const Scalar& operator()(const std::array<Index, NumIndices>& indices) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& operator()(const array<Index, NumIndices>& indices) const
     {
       eigen_assert(checkIndexRange(indices));
       return coeff(indices);
     }
 
-    inline const Scalar& operator()(Index index) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& operator()(Index index) const
     {
       eigen_internal_assert(index >= 0 && index < size());
       return coeff(index);
     }
 
-    inline const Scalar& operator[](Index index) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& operator[](Index index) const
     {
-      static_assert(NumIndices == 1, "The bracket operator is only for vectors, use the parenthesis operator instead.");
+      // The bracket operator is only for vectors, use the parenthesis operator instead.
+      EIGEN_STATIC_ASSERT(NumIndices == 1, YOU_MADE_A_PROGRAMMING_MISTAKE);
       return coeff(index);
     }
 
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     inline Scalar& operator()(Index firstIndex, Index secondIndex, IndexTypes... otherIndices)
     {
-      static_assert(sizeof...(otherIndices) + 2 == NumIndices, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
-      return operator()(std::array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
+      // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 2 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
+      return operator()(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
     }
+#endif
 
-    inline Scalar& operator()(const std::array<Index, NumIndices>& indices)
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& operator()(const array<Index, NumIndices>& indices)
     {
       eigen_assert(checkIndexRange(indices));
       return coeffRef(indices);
     }
 
-    inline Scalar& operator()(Index index)
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& operator()(Index index)
     {
       eigen_assert(index >= 0 && index < size());
       return coeffRef(index);
     }
 
-    inline Scalar& operator[](Index index)
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& operator[](Index index)
     {
-      static_assert(NumIndices == 1, "The bracket operator is only for vectors, use the parenthesis operator instead.");
+      // The bracket operator is only for vectors, use the parenthesis operator instead
+      EIGEN_STATIC_ASSERT(NumIndices == 1, YOU_MADE_A_PROGRAMMING_MISTAKE)
       return coeffRef(index);
     }
 
-    inline Tensor()
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE Tensor()
       : m_storage()
     {
     }
 
-    inline Tensor(const Self& other)
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE Tensor(const Self& other)
       : m_storage(other.m_storage)
     {
     }
 
-    inline Tensor(Self&& other)
-      : m_storage(other.m_storage)
-    {
-    }
-
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     inline Tensor(Index firstDimension, IndexTypes... otherDimensions)
-      : m_storage()
+        : m_storage(internal::array_prod(array<Index, NumIndices>{{firstDimension, otherDimensions...}}), array<Index, NumIndices>{{firstDimension, otherDimensions...}})
     {
-      static_assert(sizeof...(otherDimensions) + 1 == NumIndices, "Number of dimensions used to construct a tensor must be equal to the rank of the tensor.");
-      resize(std::array<Index, NumIndices>{{firstDimension, otherDimensions...}});
+      // The number of dimensions used to construct a tensor must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherDimensions) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
     }
+#endif
 
-    inline Tensor(std::array<Index, NumIndices> dimensions)
-      : m_storage(internal::array_prod(dimensions), dimensions)
+    inline explicit Tensor(const array<Index, NumIndices>& dimensions)
+        : m_storage(internal::array_prod(dimensions), dimensions)
     {
       EIGEN_INITIALIZE_COEFFS_IF_THAT_OPTION_IS_ENABLED
     }
 
+  template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+  EIGEN_STRONG_INLINE Tensor(const TensorBase<OtherDerived, ReadOnlyAccessors>& other)
+    {
+      typedef TensorAssignOp<Tensor, const OtherDerived> Assign;
+      Assign assign(*this, other.derived());
+      resize(TensorEvaluator<const Assign, DefaultDevice>(assign, DefaultDevice()).dimensions());
+      internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
+    }
+  template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+  EIGEN_STRONG_INLINE Tensor(const TensorBase<OtherDerived, WriteAccessors>& other)
+  {
+    typedef TensorAssignOp<Tensor, const OtherDerived> Assign;
+    Assign assign(*this, other.derived());
+    resize(TensorEvaluator<const Assign, DefaultDevice>(assign, DefaultDevice()).dimensions());
+    internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
+  }
+
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE Tensor& operator=(const Tensor& other)
+    {
+      typedef TensorAssignOp<Tensor, const Tensor> Assign;
+      Assign assign(*this, other);
+      resize(TensorEvaluator<const Assign, DefaultDevice>(assign, DefaultDevice()).dimensions());
+      internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
+      return *this;
+    }
+    template<typename OtherDerived>
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE Tensor& operator=(const OtherDerived& other)
+    {
+      typedef TensorAssignOp<Tensor, const OtherDerived> Assign;
+      Assign assign(*this, other);
+      resize(TensorEvaluator<const Assign, DefaultDevice>(assign, DefaultDevice()).dimensions());
+      internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
+      return *this;
+    }
+
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
     void resize(Index firstDimension, IndexTypes... otherDimensions)
     {
-      static_assert(sizeof...(otherDimensions) + 1 == NumIndices, "Number of dimensions used to resize a tensor must be equal to the rank of the tensor.");
-      resize(std::array<Index, NumIndices>{{firstDimension, otherDimensions...}});
+      // The number of dimensions used to resize a tensor must be equal to the rank of the tensor.
+      EIGEN_STATIC_ASSERT(sizeof...(otherDimensions) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
+      resize(array<Index, NumIndices>{{firstDimension, otherDimensions...}});
     }
+#endif
 
-    void resize(const std::array<Index, NumIndices>& dimensions)
+    void resize(const array<Index, NumIndices>& dimensions)
     {
       std::size_t i;
       Index size = Index(1);
@@ -283,7 +297,7 @@ class Tensor
     }
 
   protected:
-    bool checkIndexRange(const std::array<Index, NumIndices>& indices) const
+    bool checkIndexRange(const array<Index, NumIndices>& indices) const
     {
       using internal::array_apply_and_reduce;
       using internal::array_zip_and_reduce;
@@ -298,16 +312,16 @@ class Tensor
         array_zip_and_reduce<logical_and_op, lesser_op>(indices, m_storage.dimensions());
     }
 
-    inline Index linearizedIndex(const std::array<Index, NumIndices>& indices) const
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index linearizedIndex(const array<Index, NumIndices>& indices) const
     {
-      return internal::tensor_index_linearization_helper<Index, NumIndices, NumIndices - 1, Options&RowMajor>::run(indices, m_storage.dimensions());
+      if (Options&RowMajor) {
+        return m_storage.dimensions().IndexOfRowMajor(indices);
+      } else {
+        return m_storage.dimensions().IndexOfColMajor(indices);
+      }
     }
 };
 
 } // end namespace Eigen
 
 #endif // EIGEN_CXX11_TENSOR_TENSOR_H
-
-/*
- * kate: space-indent on; indent-width 2; mixedindent off; indent-mode cstyle;
- */
