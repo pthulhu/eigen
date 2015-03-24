@@ -58,6 +58,7 @@ struct default_packet_traits
 
     HasDiv    = 0,
     HasSqrt   = 0,
+    HasRsqrt  = 0,
     HasExp    = 0,
     HasLog    = 0,
     HasPow    = 0,
@@ -96,6 +97,28 @@ template<typename T> struct packet_traits : default_packet_traits
 };
 
 template<typename T> struct packet_traits<const T> : packet_traits<T> { };
+
+template <typename Src, typename Tgt> struct type_casting_traits {
+  enum {
+    VectorizedCast = 0,
+    SrcCoeffRatio = 1,
+    TgtCoeffRatio = 1
+  };
+};
+
+
+/** \internal \returns static_cast<TgtType>(a) (coeff-wise) */
+template <typename SrcPacket, typename TgtPacket>
+EIGEN_DEVICE_FUNC inline TgtPacket
+pcast(const SrcPacket& a) {
+  return static_cast<TgtPacket>(a);
+}
+template <typename SrcPacket, typename TgtPacket>
+EIGEN_DEVICE_FUNC inline TgtPacket
+pcast(const SrcPacket& a, const SrcPacket& /*b*/) {
+  return static_cast<TgtPacket>(a);
+}
+
 
 /** \internal \returns a + b (coeff-wise) */
 template<typename Packet> EIGEN_DEVICE_FUNC inline Packet
@@ -351,6 +374,12 @@ Packet plog(const Packet& a) { using std::log; return log(a); }
 /** \internal \returns the square-root of \a a (coeff-wise) */
 template<typename Packet> EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
 Packet psqrt(const Packet& a) { using std::sqrt; return sqrt(a); }
+
+/** \internal \returns the reciprocal square-root of \a a (coeff-wise) */
+template<typename Packet> EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
+Packet prsqrt(const Packet& a) {
+  return pdiv(pset1<Packet>(1), psqrt(a));
+}
 
 /***************************************************************************
 * The following functions might not have to be overwritten for vectorized types
