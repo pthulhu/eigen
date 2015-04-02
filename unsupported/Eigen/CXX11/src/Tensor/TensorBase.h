@@ -78,6 +78,12 @@ class TensorBase<Derived, ReadOnlyAccessors>
     }
 
     EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_rsqrt_op<Scalar>, const Derived>
+    rsqrt() const {
+      return unaryExpr(internal::scalar_rsqrt_op<Scalar>());
+    }
+
+    EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_square_op<Scalar>, const Derived>
     square() const {
       return unaryExpr(internal::scalar_square_op<Scalar>());
@@ -158,9 +164,9 @@ class TensorBase<Derived, ReadOnlyAccessors>
     }
 
     template <typename NewType> EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_cast_op<Scalar, NewType>, const Derived>
+    EIGEN_STRONG_INLINE const TensorConversionOp<NewType, const Derived>
     cast() const {
-      return unaryExpr(internal::scalar_cast_op<Scalar, NewType>());
+      return TensorConversionOp<NewType, const Derived>(derived());
     }
 
     // Generic binary operation support.
@@ -454,8 +460,7 @@ class TensorBase<Derived, ReadOnlyAccessors>
     }
 
   protected:
-    template <typename Scalar, std::size_t NumIndices, int Options> friend class Tensor;
-    template <typename Scalar, int Options> friend class TensorVarDim;
+    template <typename Scalar, std::size_t NumIndices, int Options, typename IndexType> friend class Tensor;
     template <typename OtherDerived, int AccessLevel> friend class TensorBase;
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Derived& derived() const { return *static_cast<const Derived*>(this); }
@@ -471,8 +476,7 @@ class TensorBase<Derived, WriteAccessors> : public TensorBase<Derived, ReadOnlyA
     typedef typename internal::packet_traits<Scalar>::type PacketReturnType;
     static const int NumDimensions = DerivedTraits::NumDimensions;
 
-    template <typename Scalar, std::size_t NumIndices, int Options> friend class Tensor;
-    template <typename Scalar, int Options> friend class TensorVarDim;
+    template <typename Scalar, std::size_t NumIndices, int Options, typename IndexType> friend class Tensor;
     template <typename OtherDerived, int AccessLevel> friend class TensorBase;
 
     EIGEN_DEVICE_FUNC

@@ -184,7 +184,7 @@ template <std::size_t V1=0, std::size_t V2=0, std::size_t V3=0, std::size_t V4=0
 template <std::size_t V1, std::size_t V2, std::size_t V3, std::size_t V4, std::size_t V5>
 EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE std::size_t array_prod(const Sizes<V1, V2, V3, V4, V5>&) {
   return Sizes<V1, V2, V3, V4, V5>::total_size;
-};
+}
 
 #endif
 
@@ -225,7 +225,7 @@ struct DSizes : array<DenseIndex, NumDims> {
     return NumDims;
   }
 
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE size_t TotalSize() const {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE DenseIndex TotalSize() const {
     return internal::array_prod(*static_cast<const Base*>(this));
   }
 
@@ -281,10 +281,10 @@ struct DSizes : array<DenseIndex, NumDims> {
   }
 
   // A constexpr would be so much better here
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE size_t IndexOfColMajor(const array<DenseIndex, NumDims>& indices) const {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE DenseIndex IndexOfColMajor(const array<DenseIndex, NumDims>& indices) const {
     return internal::tensor_index_linearization_helper<DenseIndex, NumDims, NumDims - 1, false>::run(indices, *static_cast<const Base*>(this));
   }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE size_t IndexOfRowMajor(const array<DenseIndex, NumDims>& indices) const {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE DenseIndex IndexOfRowMajor(const array<DenseIndex, NumDims>& indices) const {
     return internal::tensor_index_linearization_helper<DenseIndex, NumDims, NumDims - 1, true>::run(indices, *static_cast<const Base*>(this));
   }
 };
@@ -345,7 +345,7 @@ template <std::size_t V1, std::size_t V2, std::size_t V3, std::size_t V4, std::s
 };
 template <std::size_t n, std::size_t V1, std::size_t V2, std::size_t V3, std::size_t V4, std::size_t V5> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE std::size_t array_get(const Sizes<V1,V2,V3,V4,V5>&) {
   return get<n, typename Sizes<V1,V2,V3,V4,V5>::Base>::value;
-};
+}
 
 #endif
 
