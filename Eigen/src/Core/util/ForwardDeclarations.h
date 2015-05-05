@@ -189,6 +189,7 @@ template<typename Scalar> struct scalar_imag_op;
 template<typename Scalar> struct scalar_abs_op;
 template<typename Scalar> struct scalar_abs2_op;
 template<typename Scalar> struct scalar_sqrt_op;
+template<typename Scalar> struct scalar_rsqrt_op;
 template<typename Scalar> struct scalar_exp_op;
 template<typename Scalar> struct scalar_log_op;
 template<typename Scalar> struct scalar_cos_op;
@@ -287,6 +288,14 @@ struct stem_function
   typedef std::complex<typename NumTraits<Scalar>::Real> ComplexScalar;
   typedef ComplexScalar type(ComplexScalar, int);
 };
+
+template <typename LhsScalar,
+          typename RhsScalar>
+struct BlockingSizesLookupTable
+{
+  static const size_t NumSizes = 0;
+};
+
 }
 
 } // end namespace Eigen

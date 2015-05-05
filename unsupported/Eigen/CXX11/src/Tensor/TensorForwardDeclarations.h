@@ -12,8 +12,8 @@
 
 namespace Eigen {
 
-template<typename Scalar_, std::size_t NumIndices_, int Options_ = 0> class Tensor;
-template<typename Scalar_, typename Dimensions, int Options_ = 0> class TensorFixedSize;
+template<typename Scalar_, std::size_t NumIndices_, int Options_ = 0, typename IndexType = DenseIndex> class Tensor;
+template<typename Scalar_, typename Dimensions, int Options_ = 0, typename IndexType = DenseIndex> class TensorFixedSize;
 template<typename PlainObjectType, int Options_ = Unaligned> class TensorMap;
 template<typename PlainObjectType> class TensorRef;
 template<typename Derived, int AccessLevel = internal::accessors_level<Derived>::value> class TensorBase;
@@ -25,6 +25,7 @@ template<typename IfXprType, typename ThenXprType, typename ElseXprType> class T
 template<typename Op, typename Dims, typename XprType> class TensorReductionOp;
 template<typename Axis, typename LeftXprType, typename RightXprType> class TensorConcatenationOp;
 template<typename Dimensions, typename LeftXprType, typename RightXprType> class TensorContractionOp;
+template<typename TargetType, typename XprType> class TensorConversionOp;
 template<typename Dimensions, typename InputXprType, typename KernelXprType> class TensorConvolutionOp;
 template<typename PatchDim, typename XprType> class TensorPatchOp;
 template<DenseIndex Rows, DenseIndex Cols, typename XprType> class TensorImagePatchOp;
@@ -37,6 +38,7 @@ template<typename ReverseDimensions, typename XprType> class TensorReverseOp;
 template<typename PaddingDimensions, typename XprType> class TensorPaddingOp;
 template<typename Shuffle, typename XprType> class TensorShufflingOp;
 template<typename Strides, typename XprType> class TensorStridingOp;
+template<typename Generator, typename XprType> class TensorGeneratorOp;
 template<typename LeftXprType, typename RightXprType> class TensorAssignOp;
 
 template<typename XprType> class TensorEvalToOp;

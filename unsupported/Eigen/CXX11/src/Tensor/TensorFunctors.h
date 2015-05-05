@@ -77,7 +77,7 @@ template <typename T> struct MeanReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    return (saccum + predux(vaccum)) / (scalarCount_ + packetCount_ * packet_traits<Packet>::size);
+    return (saccum + predux(vaccum)) / (scalarCount_ + packetCount_ * unpacket_traits<Packet>::size);
   }
 
   protected:
@@ -182,11 +182,45 @@ template <typename T> struct ProdReducer
   }
 };
 
+
+// Random number generation
+namespace {
+#ifdef __CUDA_ARCH__
+__device__ int get_random_seed() {
+    return clock();
+}
+#else
+int get_random_seed() {
+#ifdef _WIN32
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    return st.wSecond + 1000 * st.wMilliseconds;
+#elif defined __APPLE__
+    return mach_absolute_time();
+#else
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return static_cast<int>(ts.tv_nsec);
+#endif
+}
+#endif
+}
+
 #if !defined (EIGEN_USE_GPU) || !defined(__CUDACC__) || !defined(__CUDA_ARCH__)
 // We're not compiling a cuda kernel
-template <typename T> struct UniformRandomGenerator {
+template <typename T> class UniformRandomGenerator {
 
+ public:
   static const bool PacketAccess = true;
+
+  UniformRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
+    if (!deterministic) {
+      srand(get_random_seed());
+    }
+  }
+  UniformRandomGenerator(const UniformRandomGenerator& other) {
+    m_deterministic = other.m_deterministic;
+  }
 
   template<typename Index>
   T operator()(Index, Index = 0) const {
@@ -201,53 +235,149 @@ template <typename T> struct UniformRandomGenerator {
     }
     return internal::pload<typename internal::packet_traits<T>::type>(values);
   }
+
+ private:
+  bool m_deterministic;
 };
+
+#if __cplusplus > 199711
+template <> class UniformRandomGenerator<float> {
+ public:
+  static const bool PacketAccess = true;
+
+  UniformRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
+    if (!deterministic) {
+      m_generator.seed(get_random_seed());
+    }
+  }
+  UniformRandomGenerator(const UniformRandomGenerator<float>& other) {
+    m_generator.seed(other(0, 0) * UINT_MAX);
+    m_deterministic = other.m_deterministic;
+  }
+
+  template<typename Index>
+  float operator()(Index, Index = 0) const {
+    return m_distribution(m_generator);
+  }
+  template<typename Index>
+  typename internal::packet_traits<float>::type packetOp(Index i, Index j = 0) const {
+    const int packetSize = internal::packet_traits<float>::size;
+    EIGEN_ALIGN_DEFAULT float values[packetSize];
+    for (int k = 0; k < packetSize; ++k) {
+      values[k] = this->operator()(i, j);
+    }
+    return internal::pload<typename internal::packet_traits<float>::type>(values);
+  }
+
+ private:
+  UniformRandomGenerator& operator = (const UniformRandomGenerator&);
+  // Make sure m_deterministic comes first to match the layout of the cpu
+  // version of the code.
+  bool m_deterministic;
+  mutable std::mt19937 m_generator;
+  mutable std::uniform_real_distribution<float> m_distribution;
+};
+
+template <> class UniformRandomGenerator<double> {
+ public:
+  static const bool PacketAccess = true;
+
+  UniformRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
+    if (!deterministic) {
+      m_generator.seed(get_random_seed());
+    }
+  }
+  UniformRandomGenerator(const UniformRandomGenerator<double>& other) {
+    m_generator.seed(other(0, 0) * UINT_MAX);
+    m_deterministic = other.m_deterministic;
+  }
+
+  template<typename Index>
+  double operator()(Index, Index = 0) const {
+    return m_distribution(m_generator);
+  }
+  template<typename Index>
+  typename internal::packet_traits<double>::type packetOp(Index i, Index j = 0) const {
+    const int packetSize = internal::packet_traits<double>::size;
+    EIGEN_ALIGN_DEFAULT double values[packetSize];
+    for (int k = 0; k < packetSize; ++k) {
+      values[k] = this->operator()(i, j);
+    }
+    return internal::pload<typename internal::packet_traits<double>::type>(values);
+  }
+
+ private:
+  UniformRandomGenerator& operator = (const UniformRandomGenerator&);
+  // Make sure m_deterministic comes first to match the layout of the cpu
+  // version of the code.
+  bool m_deterministic;
+  mutable std::mt19937 m_generator;
+  mutable std::uniform_real_distribution<double> m_distribution;
+};
+#endif
 
 #else
 
 // We're compiling a cuda kernel
-template <typename T> struct UniformRandomGenerator;
+template <typename T> class UniformRandomGenerator;
 
-template <> struct UniformRandomGenerator<float> {
-
+template <> class UniformRandomGenerator<float> {
+ public:
   static const bool PacketAccess = true;
 
-  EIGEN_DEVICE_FUNC UniformRandomGenerator() {
+  __device__ UniformRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    curand_init(0, tid, 0, &m_state);
+    const int seed = deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
   }
 
-  template<typename Index> EIGEN_DEVICE_FUNC
-  float operator()(Index, Index = 0) const {
+  __device__ UniformRandomGenerator(const UniformRandomGenerator& other) {
+    m_deterministic = other.m_deterministic;
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int seed = m_deterministic ? 0 : get_random_seed();
+     curand_init(seed, tid, 0, &m_state);
+  }
+
+  template<typename Index>
+  __device__ float operator()(Index, Index = 0) const {
     return curand_uniform(&m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  float4 packetOp(Index, Index = 0) const {
+  template<typename Index>
+  __device__ float4 packetOp(Index, Index = 0) const {
     return curand_uniform4(&m_state);
   }
 
  private:
+  bool m_deterministic;
   mutable curandStatePhilox4_32_10_t m_state;
 };
 
-template <> struct UniformRandomGenerator<double> {
-
+template <> class UniformRandomGenerator<double> {
+ public:
   static const bool PacketAccess = true;
 
-  EIGEN_DEVICE_FUNC UniformRandomGenerator() {
+  __device__ UniformRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    curand_init(0, tid, 0, &m_state);
+    const int seed = deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  double operator()(Index, Index = 0) const {
+  __device__ UniformRandomGenerator(const UniformRandomGenerator& other) {
+    m_deterministic = other.m_deterministic;
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int seed = m_deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
+  }
+  template<typename Index>
+  __device__ double operator()(Index, Index = 0) const {
     return curand_uniform_double(&m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  double2 packetOp(Index, Index = 0) const {
+  template<typename Index>
+  __device__ double2 packetOp(Index, Index = 0) const {
     return curand_uniform2_double(&m_state);
   }
 
  private:
+  bool m_deterministic;
   mutable curandStatePhilox4_32_10_t m_state;
 };
 
@@ -256,12 +386,19 @@ template <> struct UniformRandomGenerator<double> {
 
 #if (!defined (EIGEN_USE_GPU) || !defined(__CUDACC__) || !defined(__CUDA_ARCH__)) && __cplusplus > 199711
 // We're not compiling a cuda kernel
-template <typename T> struct NormalRandomGenerator {
-
+template <typename T> class NormalRandomGenerator {
+ public:
   static const bool PacketAccess = true;
 
-  NormalRandomGenerator() : m_distribution(0, 1) {}
-  NormalRandomGenerator(const NormalRandomGenerator& other) : m_distribution(other.m_distribution) { }
+  NormalRandomGenerator(bool deterministic = true) : m_deterministic(deterministic), m_distribution(0, 1) {
+    if (!deterministic) {
+      m_generator.seed(get_random_seed());
+    }
+  }
+  NormalRandomGenerator(const NormalRandomGenerator& other)
+      : m_deterministic(other.m_deterministic), m_distribution(other.m_distribution) {
+    m_generator.seed(other(0, 0) * UINT_MAX);
+  }
 
   template<typename Index>
   T operator()(Index, Index = 0) const {
@@ -277,59 +414,115 @@ template <typename T> struct NormalRandomGenerator {
     return internal::pload<typename internal::packet_traits<T>::type>(values);
   }
 
+ private:
+  bool m_deterministic;
   mutable std::normal_distribution<T> m_distribution;
-  mutable std::default_random_engine m_generator;
+  mutable std::mt19937 m_generator;
 };
 
 #elif defined (EIGEN_USE_GPU) && defined(__CUDACC__) && defined(__CUDA_ARCH__)
 
 // We're compiling a cuda kernel
-template <typename T> struct NormalRandomGenerator;
+template <typename T> class NormalRandomGenerator;
 
-template <> struct NormalRandomGenerator<float> {
-
+template <> class NormalRandomGenerator<float> {
+ public:
   static const bool PacketAccess = true;
 
-  EIGEN_DEVICE_FUNC NormalRandomGenerator() {
+  __device__ NormalRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    curand_init(0, tid, 0, &m_state);
+    const int seed = deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
   }
-
-  template<typename Index> EIGEN_DEVICE_FUNC
-  float operator()(Index, Index = 0) const {
+  __device__ NormalRandomGenerator(const NormalRandomGenerator<float>& other) {
+    m_deterministic = other.m_deterministic;
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int seed = m_deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
+  }
+  template<typename Index>
+   __device__ float operator()(Index, Index = 0) const {
     return curand_normal(&m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  float4 packetOp(Index, Index = 0) const {
+  template<typename Index>
+   __device__ float4 packetOp(Index, Index = 0) const {
     return curand_normal4(&m_state);
   }
 
  private:
+  bool m_deterministic;
   mutable curandStatePhilox4_32_10_t m_state;
 };
 
-template <> struct NormalRandomGenerator<double> {
-
+template <> class NormalRandomGenerator<double> {
+ public:
   static const bool PacketAccess = true;
 
-  EIGEN_DEVICE_FUNC NormalRandomGenerator() {
+  __device__ NormalRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    curand_init(0, tid, 0, &m_state);
+    const int seed = deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  double operator()(Index, Index = 0) const {
+  __device__ NormalRandomGenerator(const NormalRandomGenerator<double>& other) {
+    m_deterministic = other.m_deterministic;
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int seed = m_deterministic ? 0 : get_random_seed();
+    curand_init(seed, tid, 0, &m_state);
+  }
+  template<typename Index>
+  __device__ double operator()(Index, Index = 0) const {
     return curand_normal_double(&m_state);
   }
-  template<typename Index> EIGEN_DEVICE_FUNC
-  double2 packetOp(Index, Index = 0) const {
+  template<typename Index>
+  __device__ double2 packetOp(Index, Index = 0) const {
     return curand_normal2_double(&m_state);
   }
 
  private:
+  bool m_deterministic;
   mutable curandStatePhilox4_32_10_t m_state;
 };
 
+#else
+
+template <typename T> class NormalRandomGenerator {
+ public:
+  NormalRandomGenerator(bool deterministic = true) : m_deterministic(deterministic) {}
+
+ private:
+  bool m_deterministic;
+};
+
 #endif
+
+
+template <typename T, typename Index, size_t NumDims>
+class GaussianGenerator {
+ public:
+  static const bool PacketAccess = false;
+
+  EIGEN_DEVICE_FUNC GaussianGenerator(const array<T, NumDims>& means,
+                                      const array<T, NumDims>& std_devs)
+      : m_means(means)
+  {
+    for (size_t i = 0; i < NumDims; ++i) {
+      m_two_sigmas[i] = std_devs[i] * std_devs[i] * 2;
+    }
+  }
+
+  T operator()(const array<Index, NumDims>& coordinates) const {
+    T tmp = T(0);
+    for (size_t i = 0; i < NumDims; ++i) {
+      T offset = coordinates[i] - m_means[i];
+      tmp += offset * offset / m_two_sigmas[i];
+    }
+    return std::exp(-tmp);
+  }
+
+ private:
+  array<T, NumDims> m_means;
+  array<T, NumDims> m_two_sigmas;
+};
 
 
 } // end namespace internal

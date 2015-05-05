@@ -95,6 +95,7 @@ class SparseMatrix
   public:
     typedef SparseCompressedBase<SparseMatrix> Base;
     using Base::isCompressed;
+    using Base::nonZeros;
     _EIGEN_SPARSE_PUBLIC_INTERFACE(SparseMatrix)
     EIGEN_SPARSE_INHERIT_ASSIGNMENT_OPERATOR(SparseMatrix, +=)
     EIGEN_SPARSE_INHERIT_ASSIGNMENT_OPERATOR(SparseMatrix, -=)
@@ -122,9 +123,6 @@ class SparseMatrix
     StorageIndex* m_outerIndex;
     StorageIndex* m_innerNonZeros;     // optional, if null then the data is compressed
     Storage m_data;
-    
-    Eigen::Map<IndexVector> innerNonZeros() { return Eigen::Map<IndexVector>(m_innerNonZeros, m_innerNonZeros?m_outerSize:0); }
-    const  Eigen::Map<const IndexVector> innerNonZeros() const { return Eigen::Map<const IndexVector>(m_innerNonZeros, m_innerNonZeros?m_outerSize:0); }
 
   public:
     
@@ -252,14 +250,6 @@ class SparseMatrix
         memset(m_innerNonZeros, 0, (m_outerSize)*sizeof(StorageIndex));
     }
 
-    /** \returns the number of non zero coefficients */
-    inline Index nonZeros() const
-    {
-      if(m_innerNonZeros)
-        return innerNonZeros().sum();
-      return convert_index(Index(m_data.size()));
-    }
-
     /** Preallocates \a reserveSize non zeros.
       *
       * Precondition: the matrix must be in compressed mode. */
@@ -272,22 +262,25 @@ class SparseMatrix
     #ifdef EIGEN_PARSED_BY_DOXYGEN
     /** Preallocates \a reserveSize[\c j] non zeros for each column (resp. row) \c j.
       *
-      * This function turns the matrix in non-compressed mode */
+      * This function turns the matrix in non-compressed mode.
+      * 
+      * The type \c SizesType must expose the following interface:
+        \code
+        typedef value_type;
+        const value_type& operator[](i) const;
+        \endcode
+      * for \c i in the [0,this->outerSize()[ range.
+      * Typical choices include std::vector<int>, Eigen::VectorXi, Eigen::VectorXi::Constant, etc.
+      */
     template<class SizesType>
     inline void reserve(const SizesType& reserveSizes);
     #else
     template<class SizesType>
-    inline void reserve(const SizesType& reserveSizes, const typename SizesType::value_type& enableif = typename SizesType::value_type())
-    {
-      EIGEN_UNUSED_VARIABLE(enableif);
-      reserveInnerVectors(reserveSizes);
-    }
-    template<class SizesType>
-    inline void reserve(const SizesType& reserveSizes, const typename SizesType::Scalar& enableif =
+    inline void reserve(const SizesType& reserveSizes, const typename SizesType::value_type& enableif =
     #if (!EIGEN_COMP_MSVC) || (EIGEN_COMP_MSVC>=1500) // MSVC 2005 fails to compile with this typename
         typename
     #endif
-        SizesType::Scalar())
+        SizesType::value_type())
     {
       EIGEN_UNUSED_VARIABLE(enableif);
       reserveInnerVectors(reserveSizes);
@@ -799,10 +792,8 @@ class SparseMatrix
       std::free(m_innerNonZeros);
     }
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
     /** Overloaded for performance */
     Scalar sum() const;
-#endif
     
 #   ifdef EIGEN_SPARSEMATRIX_PLUGIN
 #     include EIGEN_SPARSEMATRIX_PLUGIN
@@ -1172,8 +1163,12 @@ typename SparseMatrix<_Scalar,_Options,_Index>::Scalar& SparseMatrix<_Scalar,_Op
     return (m_data.value(p) = 0);
   }
   
-  // make sure the matrix is compatible to random un-compressed insertion:
-  m_data.resize(m_data.allocatedSize());
+  if(m_data.size() != m_data.allocatedSize())
+  {
+    // make sure the matrix is compatible to random un-compressed insertion:
+    m_data.resize(m_data.allocatedSize());
+    this->reserveInnerVectors(Array<StorageIndex,Dynamic,1>::Constant(2*m_outerSize, convert_index(m_outerSize)));
+  }
   
   return insertUncompressed(row,col);
 }

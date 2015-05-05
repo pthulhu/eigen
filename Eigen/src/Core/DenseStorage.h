@@ -34,14 +34,35 @@ void check_static_allocation_size()
   #endif
 }
 
+template<typename T, int Size, typename Packet = typename packet_traits<T>::type,
+         bool Match     =  bool((Size%unpacket_traits<Packet>::size)==0),
+         bool TryHalf   =  bool(int(unpacket_traits<Packet>::size) > 1)
+                        && bool(int(unpacket_traits<Packet>::size) > int(unpacket_traits<typename unpacket_traits<Packet>::half>::size)) >
+struct compute_default_alignment
+{
+  enum { value = 0 };
+};
+
+template<typename T, int Size, typename Packet, bool TryHalf>
+struct compute_default_alignment<T, Size, Packet, true, TryHalf> // Match
+{
+  enum { value = sizeof(T) * unpacket_traits<Packet>::size };
+};
+
+template<typename T, int Size, typename Packet>
+struct compute_default_alignment<T, Size, Packet, false, true> // Try-half
+{
+  // current packet too large, try with an half-packet
+  enum { value = compute_default_alignment<T, Size, typename unpacket_traits<Packet>::half>::value };
+};
+
 /** \internal
   * Static array. If the MatrixOrArrayOptions require auto-alignment, the array will be automatically aligned:
   * to 16 bytes boundary if the total size is a multiple of 16 bytes.
   */
 template <typename T, int Size, int MatrixOrArrayOptions,
           int Alignment = (MatrixOrArrayOptions&DontAlign) ? 0
-                        : (((Size*sizeof(T))%EIGEN_ALIGN_BYTES)==0) ? EIGEN_ALIGN_BYTES
-                        : 0 >
+                        : compute_default_alignment<T,Size>::value >
 struct plain_array
 {
   T array[Size];
@@ -81,14 +102,71 @@ struct plain_array
 #endif
 
 template <typename T, int Size, int MatrixOrArrayOptions>
-struct plain_array<T, Size, MatrixOrArrayOptions, EIGEN_ALIGN_BYTES>
+struct plain_array<T, Size, MatrixOrArrayOptions, 8>
 {
-  EIGEN_USER_ALIGN_DEFAULT T array[Size];
+  EIGEN_ALIGN_TO_BOUNDARY(8) T array[Size];
 
   EIGEN_DEVICE_FUNC
   plain_array() 
   { 
-    EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(EIGEN_ALIGN_BYTES-1);
+    EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(7);
+    check_static_allocation_size<T,Size>();
+  }
+
+  EIGEN_DEVICE_FUNC
+  plain_array(constructor_without_unaligned_array_assert) 
+  { 
+    check_static_allocation_size<T,Size>();
+  }
+};
+
+template <typename T, int Size, int MatrixOrArrayOptions>
+struct plain_array<T, Size, MatrixOrArrayOptions, 16>
+{
+  EIGEN_ALIGN_TO_BOUNDARY(16) T array[Size];
+
+  EIGEN_DEVICE_FUNC
+  plain_array() 
+  { 
+    EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(15);
+    check_static_allocation_size<T,Size>();
+  }
+
+  EIGEN_DEVICE_FUNC
+  plain_array(constructor_without_unaligned_array_assert) 
+  { 
+    check_static_allocation_size<T,Size>();
+  }
+};
+
+template <typename T, int Size, int MatrixOrArrayOptions>
+struct plain_array<T, Size, MatrixOrArrayOptions, 32>
+{
+  EIGEN_ALIGN_TO_BOUNDARY(32) T array[Size];
+
+  EIGEN_DEVICE_FUNC
+  plain_array() 
+  { 
+    EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(31);
+    check_static_allocation_size<T,Size>();
+  }
+
+  EIGEN_DEVICE_FUNC
+  plain_array(constructor_without_unaligned_array_assert) 
+  { 
+    check_static_allocation_size<T,Size>();
+  }
+};
+
+template <typename T, int Size, int MatrixOrArrayOptions>
+struct plain_array<T, Size, MatrixOrArrayOptions, 64>
+{
+  EIGEN_ALIGN_TO_BOUNDARY(64) T array[Size];
+
+  EIGEN_DEVICE_FUNC
+  plain_array() 
+  { 
+    EIGEN_MAKE_UNALIGNED_ARRAY_ASSERT(63);
     check_static_allocation_size<T,Size>();
   }
 
@@ -140,7 +218,13 @@ template<typename T, int Size, int _Rows, int _Cols, int _Options> class DenseSt
       if (this != &other) m_data = other.m_data;
       return *this; 
     }
-    EIGEN_DEVICE_FUNC DenseStorage(Index,Index,Index) {}
+    EIGEN_DEVICE_FUNC DenseStorage(Index size, Index nbRows, Index nbCols) {
+      EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN
+      eigen_internal_assert(size==nbRows*nbCols && nbRows==_Rows && nbCols==_Cols);
+      EIGEN_UNUSED_VARIABLE(size);
+      EIGEN_UNUSED_VARIABLE(nbRows);
+      EIGEN_UNUSED_VARIABLE(nbCols);
+    }
     EIGEN_DEVICE_FUNC void swap(DenseStorage& other) { std::swap(m_data,other.m_data); }
     EIGEN_DEVICE_FUNC static Index rows(void) {return _Rows;}
     EIGEN_DEVICE_FUNC static Index cols(void) {return _Cols;}
@@ -280,7 +364,10 @@ template<typename T, int _Options> class DenseStorage<T, Dynamic, Dynamic, Dynam
        : m_data(0), m_rows(0), m_cols(0) {}
     DenseStorage(Index size, Index nbRows, Index nbCols)
       : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(size)), m_rows(nbRows), m_cols(nbCols)
-    { EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN }
+    {
+      EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN
+      eigen_internal_assert(size==nbRows*nbCols && nbRows>=0 && nbCols >=0);
+    }
     DenseStorage(const DenseStorage& other)
       : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(other.m_rows*other.m_cols))
       , m_rows(other.m_rows)
@@ -355,8 +442,12 @@ template<typename T, int _Rows, int _Options> class DenseStorage<T, Dynamic, _Ro
   public:
     EIGEN_DEVICE_FUNC DenseStorage() : m_data(0), m_cols(0) {}
     explicit DenseStorage(internal::constructor_without_unaligned_array_assert) : m_data(0), m_cols(0) {}
-    DenseStorage(Index size, Index, Index nbCols) : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(size)), m_cols(nbCols)
-    { EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN }
+    DenseStorage(Index size, Index nbRows, Index nbCols) : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(size)), m_cols(nbCols)
+    {
+      EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN
+      eigen_internal_assert(size==nbRows*nbCols && nbRows==_Rows && nbCols >=0);
+      EIGEN_UNUSED_VARIABLE(nbRows);
+    }
     DenseStorage(const DenseStorage& other)
       : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(_Rows*other.m_cols))
       , m_cols(other.m_cols)
@@ -424,8 +515,12 @@ template<typename T, int _Cols, int _Options> class DenseStorage<T, Dynamic, Dyn
   public:
     EIGEN_DEVICE_FUNC DenseStorage() : m_data(0), m_rows(0) {}
     explicit DenseStorage(internal::constructor_without_unaligned_array_assert) : m_data(0), m_rows(0) {}
-    DenseStorage(Index size, Index nbRows, Index) : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(size)), m_rows(nbRows)
-    { EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN }
+    DenseStorage(Index size, Index nbRows, Index nbCols) : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(size)), m_rows(nbRows)
+    {
+      EIGEN_INTERNAL_DENSE_STORAGE_CTOR_PLUGIN
+      eigen_internal_assert(size==nbRows*nbCols && nbRows>=0 && nbCols == _Cols);
+      EIGEN_UNUSED_VARIABLE(nbCols);
+    }
     DenseStorage(const DenseStorage& other)
       : m_data(internal::conditional_aligned_new_auto<T,(_Options&DontAlign)==0>(other.m_rows*_Cols))
       , m_rows(other.m_rows)

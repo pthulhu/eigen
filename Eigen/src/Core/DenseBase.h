@@ -66,7 +66,14 @@ template<typename Derived> class DenseBase
      */
     typedef typename internal::traits<Derived>::StorageIndex StorageIndex;
 
+    /** The numeric type of the expression' coefficients, e.g. float, double, int or std::complex<float>, etc. */
     typedef typename internal::traits<Derived>::Scalar Scalar;
+    
+    /** The numeric type of the expression' coefficients, e.g. float, double, int or std::complex<float>, etc.
+      *
+      * It is an alias for the Scalar type */
+    typedef Scalar value_type;
+    
     typedef typename internal::packet_traits<Scalar>::type PacketScalar;
     typedef typename NumTraits<Scalar>::Real RealScalar;
 
@@ -269,13 +276,12 @@ template<typename Derived> class DenseBase
     EIGEN_DEVICE_FUNC
     Derived& operator=(const ReturnByValue<OtherDerived>& func);
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
-    /** Copies \a other into *this without evaluating other. \returns a reference to *this.
+    /** \ínternal
+      * Copies \a other into *this without evaluating other. \returns a reference to *this.
       * \deprecated */
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC
     Derived& lazyAssign(const DenseBase<OtherDerived>& other);
-#endif // not EIGEN_PARSED_BY_DOXYGEN
 
     EIGEN_DEVICE_FUNC
     CommaInitializer<Derived> operator<< (const Scalar& s);

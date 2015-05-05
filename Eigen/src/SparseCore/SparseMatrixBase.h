@@ -28,6 +28,12 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
   public:
 
     typedef typename internal::traits<Derived>::Scalar Scalar;
+    
+    /** The numeric type of the expression' coefficients, e.g. float, double, int or std::complex<float>, etc.
+      *
+      * It is an alias for the Scalar type */
+    typedef Scalar value_type;
+    
     typedef typename internal::packet_traits<Scalar>::type PacketScalar;
     typedef typename internal::traits<Derived>::StorageKind StorageKind;
     typedef typename internal::traits<Derived>::StorageIndex StorageIndex;
@@ -149,9 +155,6 @@ template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
     /** \returns the number of coefficients, which is \a rows()*cols().
       * \sa rows(), cols(). */
     inline Index size() const { return rows() * cols(); }
-    /** \returns the number of nonzero coefficients which is in practice the number
-      * of stored coefficients. */
-    inline Index nonZeros() const { return derived().nonZeros(); }
     /** \returns true if either the number of rows or the number of columns is equal to 1.
       * In other words, this function returns
       * \code rows()==1 || cols()==1 \endcode

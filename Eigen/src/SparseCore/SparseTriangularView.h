@@ -11,7 +11,10 @@
 #ifndef EIGEN_SPARSE_TRIANGULARVIEW_H
 #define EIGEN_SPARSE_TRIANGULARVIEW_H
 
-namespace Eigen { 
+#ifndef EIGEN_PARSED_BY_DOXYGEN
+// Doxygen gets confused with template specialization:
+// https://bugzilla.gnome.org/show_bug.cgi?id=406027
+namespace Eigen {
 
 template<typename MatrixType, unsigned int Mode> class TriangularViewImpl<MatrixType,Mode,Sparse>
   : public SparseMatrixBase<TriangularView<MatrixType,Mode> >
@@ -50,13 +53,6 @@ protected:
 
     template<typename OtherDerived> void solveInPlace(MatrixBase<OtherDerived>& other) const;
     template<typename OtherDerived> void solveInPlace(SparseMatrixBase<OtherDerived>& other) const;
-
-    inline Index nonZeros() const {
-      // FIXME HACK number of nonZeros is required for product logic
-      // this returns only an upper bound (but should be OK for most purposes)
-      return derived().nestedExpression().nonZeros();
-    }
-
   
 };
 
@@ -191,6 +187,10 @@ public:
     
   explicit unary_evaluator(const XprType &xpr) : m_argImpl(xpr.nestedExpression()) {}
   
+  inline Index nonZerosEstimate() const {
+    return m_argImpl.nonZerosEstimate();
+  }
+  
   class InnerIterator : public EvalIterator
   {
       typedef EvalIterator Base;
@@ -277,5 +277,7 @@ SparseMatrixBase<Derived>::triangularView() const
 }
 
 } // end namespace Eigen
+
+#endif // not EIGEN_PARSED_BY_DOXYGEN
 
 #endif // EIGEN_SPARSE_TRIANGULARVIEW_H

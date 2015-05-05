@@ -65,6 +65,7 @@ template<> struct packet_traits<float>  : default_packet_traits
     HasLog  = 1,
     HasExp  = 1,
     HasSqrt = 1,
+    HasRsqrt = 1,
     HasBlend = 1
   };
 };
@@ -79,8 +80,9 @@ template<> struct packet_traits<double> : default_packet_traits
     HasHalfPacket = 1,
 
     HasDiv  = 1,
-    HasExp  = 0,
+    HasExp  = 1,
     HasSqrt = 1,
+    HasRsqrt = 1,
     HasBlend = 1
   };
 };
