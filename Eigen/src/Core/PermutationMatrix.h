@@ -353,7 +353,7 @@ class PermutationMatrix : public PermutationBase<PermutationMatrix<SizeAtCompile
       * array's size.
       */
     template<typename Other>
-    explicit inline PermutationMatrix(const MatrixBase<Other>& a_indices) : m_indices(a_indices)
+    explicit inline PermutationMatrix(const MatrixBase<Other>& indices) : m_indices(indices)
     {}
 
     /** Convert the Transpositions \a tr to a permutation matrix */
@@ -527,8 +527,8 @@ class PermutationWrapper : public PermutationBase<PermutationWrapper<_IndicesTyp
     typedef typename Traits::IndicesType IndicesType;
     #endif
 
-    inline PermutationWrapper(const IndicesType& a_indices)
-      : m_indices(a_indices)
+    inline PermutationWrapper(const IndicesType& indices)
+      : m_indices(indices)
     {}
 
     /** const version of indices(). */
@@ -596,7 +596,8 @@ struct permut_matrix_product_retval
       const Index n = Side==OnTheLeft ? rows() : cols();
       // FIXME we need an is_same for expression that is not sensitive to constness. For instance
       // is_same_xpr<Block<const Matrix>, Block<Matrix> >::value should be true.
-      if(is_same<MatrixTypeNestedCleaned,Dest>::value && extract_data(dst) == extract_data(m_matrix))
+      //if(is_same<MatrixTypeNestedCleaned,Dest>::value && extract_data(dst) == extract_data(m_matrix))
+      if(is_same_dense(dst, m_matrix))
       {
         // apply the permutation inplace
         Matrix<bool,PermutationType::RowsAtCompileTime,1,0,PermutationType::MaxRowsAtCompileTime> mask(m_permutation.size());

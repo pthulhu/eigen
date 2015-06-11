@@ -725,6 +725,9 @@ class SparseMatrix
       }
       else if(this!=&other)
       {
+        #ifdef EIGEN_SPARSE_CREATE_TEMPORARY_PLUGIN
+          EIGEN_SPARSE_CREATE_TEMPORARY_PLUGIN
+        #endif
         initAssignment(other);
         if(other.isCompressed())
         {
@@ -1119,9 +1122,9 @@ typename SparseMatrix<_Scalar,_Options,_Index>::Scalar& SparseMatrix<_Scalar,_Op
       //     so that the entire free-space is allocated to the current inner-vector.
       eigen_internal_assert(data_end < m_data.allocatedSize());
       StorageIndex new_end = convert_index(m_data.allocatedSize());
-      for(Index j=outer+1; j<=m_outerSize; ++j)
-        if(m_outerIndex[j]==data_end)
-          m_outerIndex[j] = new_end;
+      for(Index k=outer+1; k<=m_outerSize; ++k)
+        if(m_outerIndex[k]==data_end)
+          m_outerIndex[k] = new_end;
     }
     return m_data.value(p);
   }
@@ -1144,9 +1147,9 @@ typename SparseMatrix<_Scalar,_Options,_Index>::Scalar& SparseMatrix<_Scalar,_Op
       //     so that the entire free-space is allocated to the current inner-vector.
       eigen_internal_assert(data_end < m_data.allocatedSize());
       StorageIndex new_end = convert_index(m_data.allocatedSize());
-      for(Index j=outer+1; j<=m_outerSize; ++j)
-        if(m_outerIndex[j]==data_end)
-          m_outerIndex[j] = new_end;
+      for(Index k=outer+1; k<=m_outerSize; ++k)
+        if(m_outerIndex[k]==data_end)
+          m_outerIndex[k] = new_end;
     }
     
     // and insert it at the right position (sorted insertion)

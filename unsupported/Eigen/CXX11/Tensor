@@ -34,8 +34,19 @@
 #include <random>
 #endif
 
+#ifdef _WIN32
+#include <winbase.h>
+#elif defined(__APPLE__)
+#include <mach/mach_time.h>
+#else
+#include <time.h>
+#endif
+
 #ifdef EIGEN_USE_THREADS
-#include <future>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #endif
 
 #ifdef EIGEN_USE_GPU

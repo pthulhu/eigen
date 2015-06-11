@@ -375,7 +375,7 @@ void BDCSVD<MatrixType>::structured_update(Block<MatrixXr,Dynamic,Dynamic> A, co
 template<typename MatrixType>
 void BDCSVD<MatrixType>::divide (Index firstCol, Index lastCol, Index firstRowW, Index firstColW, Index shift)
 {
-  // requires nbRows = nbCols + 1;
+  // requires rows = cols + 1;
   using std::pow;
   using std::sqrt;
   using std::abs;
@@ -825,7 +825,7 @@ void BDCSVD<MatrixType>::computeSingVals(const ArrayRef& col0, const ArrayRef& d
       while (rightShifted - leftShifted > 2 * NumTraits<RealScalar>::epsilon() * numext::maxi<RealScalar>(abs(leftShifted), abs(rightShifted)))
       {
         RealScalar midShifted = (leftShifted + rightShifted) / 2;
-        RealScalar fMid = secularEq(midShifted, col0, diag, perm, diagShifted, shift);
+        fMid = secularEq(midShifted, col0, diag, perm, diagShifted, shift);
         if (fLeft * fMid < 0)
         {
           rightShifted = midShifted;

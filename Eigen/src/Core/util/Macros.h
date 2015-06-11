@@ -415,6 +415,14 @@
 #define EIGEN_HAS_CONSTEXPR 1
 #endif
 
+// Does the compiler support C99 math?
+// Let's be conservative and enable the default C++11 implementation only if we are sure it exists
+#if (__cplusplus >= 201103L) && (EIGEN_COMP_GNUC_STRICT || EIGEN_COMP_CLANG || EIGEN_COMP_MSVC || EIGEN_COMP_ICC)  \
+    && (EIGEN_ARCH_i386_OR_x86_64) && (EIGEN_OS_GNULINUX || EIGEN_OS_WIN_STRICT || EIGEN_OS_MAC) || \
+    (EIGEN_COMP_GNUC_STRICT || (EIGEN_COMP_ICC && EIGEN_COMP_GNUC) ||  (EIGEN_COMP_CLANG) ||  (EIGEN_COMP_MSVC >= 1800))
+#define EIGEN_HAS_C99_MATH 1
+#endif
+
 /** Allows to disable some optimizations which might affect the accuracy of the result.
   * Such optimization are enabled by default, and set EIGEN_FAST_MATH to 0 to disable them.
   * They currently include:
@@ -592,6 +600,7 @@ namespace Eigen {
   #error Please tell me what is the equivalent of __attribute__((aligned(n))) for your compiler
 #endif
 
+#define EIGEN_ALIGN8  EIGEN_ALIGN_TO_BOUNDARY(8)
 #define EIGEN_ALIGN16 EIGEN_ALIGN_TO_BOUNDARY(16)
 #define EIGEN_ALIGN32 EIGEN_ALIGN_TO_BOUNDARY(32)
 #define EIGEN_ALIGN_DEFAULT EIGEN_ALIGN_TO_BOUNDARY(EIGEN_ALIGN_BYTES)
