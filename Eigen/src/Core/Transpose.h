@@ -31,7 +31,7 @@ namespace internal {
 template<typename MatrixType>
 struct traits<Transpose<MatrixType> > : public traits<MatrixType>
 {
-  typedef typename nested<MatrixType>::type MatrixTypeNested;
+  typedef typename ref_selector<MatrixType>::type MatrixTypeNested;
   typedef typename remove_reference<MatrixTypeNested>::type MatrixTypeNestedPlain;
   enum {
     RowsAtCompileTime = MatrixType::ColsAtCompileTime,
@@ -316,14 +316,6 @@ inline void MatrixBase<Derived>::adjointInPlace()
 // The following is to detect aliasing problems in most common cases.
 
 namespace internal {
-
-template<typename BinOp,typename NestedXpr,typename Rhs>
-struct blas_traits<SelfCwiseBinaryOp<BinOp,NestedXpr,Rhs> >
- : blas_traits<NestedXpr>
-{
-  typedef SelfCwiseBinaryOp<BinOp,NestedXpr,Rhs> XprType;
-  static inline const XprType extract(const XprType& x) { return x; }
-};
 
 template<bool DestIsTransposed, typename OtherDerived>
 struct check_transpose_aliasing_compile_time_selector
