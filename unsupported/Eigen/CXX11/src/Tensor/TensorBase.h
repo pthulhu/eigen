@@ -279,6 +279,38 @@ class TensorBase<Derived, ReadOnlyAccessors>
       return binaryExpr(other.derived(), std::not_equal_to<Scalar>());
     }
 
+    // comparisons and tests for Scalars
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::less<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator<(Scalar threshold) const {
+      return operator<(constant(threshold));
+    }
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::less_equal<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator<=(Scalar threshold) const {
+      return operator<=(constant(threshold));
+    }
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::greater<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator>(Scalar threshold) const {
+      return operator>(constant(threshold));
+    }
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::greater_equal<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator>=(Scalar threshold) const {
+      return operator>=(constant(threshold));
+    }
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::equal_to<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator==(Scalar threshold) const {
+      return operator==(constant(threshold));
+    }
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseBinaryOp<std::not_equal_to<Scalar>, const Derived, const TensorCwiseNullaryOp<internal::scalar_constant_op<Scalar>, const Derived> >
+    operator!=(Scalar threshold) const {
+      return operator!=(constant(threshold));
+    }
+
     // Coefficient-wise ternary operators.
     template<typename ThenDerived, typename ElseDerived> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
     const TensorSelectOp<const Derived, const ThenDerived, const ElseDerived>
@@ -300,6 +332,13 @@ class TensorBase<Derived, ReadOnlyAccessors>
     const TensorConvolutionOp<const Dimensions, const Derived, const KernelDerived>
     convolve(const KernelDerived& kernel, const Dimensions& dims) const {
       return TensorConvolutionOp<const Dimensions, const Derived, const KernelDerived>(derived(), kernel.derived(), dims);
+    }
+
+    // Fourier transforms
+    template <int FFTDataType, int FFTDirection, typename FFT> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorFFTOp<const FFT, const Derived, FFTDataType, FFTDirection>
+    fft(const FFT& fft) const {
+      return TensorFFTOp<const FFT, const Derived, FFTDataType, FFTDirection>(derived(), fft);
     }
 
     // Reductions.
@@ -361,6 +400,32 @@ class TensorBase<Derived, ReadOnlyAccessors>
     minimum() const {
       DimensionList<Index, NumDimensions> in_dims;
       return TensorReductionOp<internal::MinReducer<CoeffReturnType>, const DimensionList<Index, NumDimensions>, const Derived>(derived(), in_dims, internal::MinReducer<CoeffReturnType>());
+    }
+
+    template <typename Dims> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorReductionOp<internal::AndReducer, const Dims, const TensorConversionOp<bool, const Derived> >
+    all(const Dims& dims) const {
+      return cast<bool>().reduce(dims, internal::AndReducer());
+    }
+
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorReductionOp<internal::AndReducer, const DimensionList<Index, NumDimensions>, const TensorConversionOp<bool, const Derived> >
+    all() const {
+      DimensionList<Index, NumDimensions> in_dims;
+      return cast<bool>().reduce(in_dims, internal::AndReducer());
+    }
+
+    template <typename Dims> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorReductionOp<internal::OrReducer, const Dims, const TensorConversionOp<bool, const Derived> >
+    any(const Dims& dims) const {
+      return cast<bool>().reduce(dims, internal::OrReducer());
+    }
+
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorReductionOp<internal::OrReducer, const DimensionList<Index, NumDimensions>, const TensorConversionOp<bool, const Derived> >
+    any() const {
+      DimensionList<Index, NumDimensions> in_dims;
+      return cast<bool>().reduce(in_dims, internal::OrReducer());
     }
 
    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE

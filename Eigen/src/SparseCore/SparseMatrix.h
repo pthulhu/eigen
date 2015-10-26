@@ -729,7 +729,8 @@ class SparseMatrix
       m_data.swap(other.m_data);
     }
 
-    /** Sets *this to the identity matrix */
+    /** Sets *this to the identity matrix.
+      * This function also turns the matrix into compressed mode, and drop any reserved memory. */
     inline void setIdentity()
     {
       eigen_assert(rows() == cols() && "ONLY FOR SQUARED MATRICES");
@@ -737,6 +738,8 @@ class SparseMatrix
       Eigen::Map<IndexVector>(&this->m_data.index(0), rows()).setLinSpaced(0, StorageIndex(rows()-1));
       Eigen::Map<ScalarVector>(&this->m_data.value(0), rows()).setOnes();
       Eigen::Map<IndexVector>(this->m_outerIndex, rows()+1).setLinSpaced(0, StorageIndex(rows()));
+      std::free(m_innerNonZeros);
+      m_innerNonZeros = 0;
     }
     inline SparseMatrix& operator=(const SparseMatrix& other)
     {
@@ -1131,6 +1134,14 @@ typename SparseMatrix<_Scalar,_Options,_Index>::Scalar& SparseMatrix<_Scalar,_Op
       StorageIndex end = convert_index(m_data.allocatedSize());
       for(Index j=1; j<=m_outerSize; ++j)
         m_outerIndex[j] = end;
+    }
+    else
+    {
+      // turn the matrix into non-compressed mode
+      m_innerNonZeros = static_cast<StorageIndex*>(std::malloc(m_outerSize * sizeof(StorageIndex)));
+      if(!m_innerNonZeros) internal::throw_std_bad_alloc();
+      for(Index j=0; j<m_outerSize; ++j)
+        m_innerNonZeros[j] = m_outerIndex[j+1]-m_outerIndex[j];
     }
   }
   
