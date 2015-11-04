@@ -188,6 +188,8 @@ template<typename SparseMatrixType> void sparse_basic(const SparseMatrixType& re
     refM4.setRandom();
     // sparse cwise* dense
     VERIFY_IS_APPROX(m3.cwiseProduct(refM4), refM3.cwiseProduct(refM4));
+    // dense cwise* sparse
+    VERIFY_IS_APPROX(refM4.cwiseProduct(m3), refM4.cwiseProduct(refM3));
 //     VERIFY_IS_APPROX(m3.cwise()/refM4, refM3.cwise()/refM4);
 
     // test aliasing
@@ -338,6 +340,10 @@ template<typename SparseMatrixType> void sparse_basic(const SparseMatrixType& re
     refMat3 = refMat2.template triangularView<StrictlyLower>();
     m3 = m2.template triangularView<StrictlyLower>();
     VERIFY_IS_APPROX(m3, refMat3);
+
+    // check sparse-traingular to dense
+    refMat3 = m2.template triangularView<StrictlyUpper>();
+    VERIFY_IS_APPROX(refMat3, DenseMatrix(refMat2.template triangularView<StrictlyUpper>()));
   }
   
   // test selfadjointView
