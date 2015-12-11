@@ -107,32 +107,32 @@ struct triangular_solver_selector<Lhs,Rhs,Side,Mode,NoUnrolling,Dynamic>
 * meta-unrolling implementation
 ***************************************************************************/
 
-template<typename Lhs, typename Rhs, int Mode, int Index, int Size,
-         bool Stop = Index==Size>
+template<typename Lhs, typename Rhs, int Mode, int LoopIndex, int Size,
+         bool Stop = LoopIndex==Size>
 struct triangular_solver_unroller;
 
-template<typename Lhs, typename Rhs, int Mode, int Index, int Size>
-struct triangular_solver_unroller<Lhs,Rhs,Mode,Index,Size,false> {
+template<typename Lhs, typename Rhs, int Mode, int LoopIndex, int Size>
+struct triangular_solver_unroller<Lhs,Rhs,Mode,LoopIndex,Size,false> {
   enum {
     IsLower = ((Mode&Lower)==Lower),
-    I = IsLower ? Index : Size - Index - 1,
-    S = IsLower ? 0     : I+1
+    DiagIndex  = IsLower ? LoopIndex : Size - LoopIndex - 1,
+    StartIndex = IsLower ? 0         : DiagIndex+1
   };
   static void run(const Lhs& lhs, Rhs& rhs)
   {
-    if (Index>0)
-      rhs.coeffRef(I) -= lhs.row(I).template segment<Index>(S).transpose()
-                         .cwiseProduct(rhs.template segment<Index>(S)).sum();
+    if (LoopIndex>0)
+      rhs.coeffRef(DiagIndex) -= lhs.row(DiagIndex).template segment<LoopIndex>(StartIndex).transpose()
+                                .cwiseProduct(rhs.template segment<LoopIndex>(StartIndex)).sum();
 
     if(!(Mode & UnitDiag))
-      rhs.coeffRef(I) /= lhs.coeff(I,I);
+      rhs.coeffRef(DiagIndex) /= lhs.coeff(DiagIndex,DiagIndex);
 
-    triangular_solver_unroller<Lhs,Rhs,Mode,Index+1,Size>::run(lhs,rhs);
+    triangular_solver_unroller<Lhs,Rhs,Mode,LoopIndex+1,Size>::run(lhs,rhs);
   }
 };
 
-template<typename Lhs, typename Rhs, int Mode, int Index, int Size>
-struct triangular_solver_unroller<Lhs,Rhs,Mode,Index,Size,true> {
+template<typename Lhs, typename Rhs, int Mode, int LoopIndex, int Size>
+struct triangular_solver_unroller<Lhs,Rhs,Mode,LoopIndex,Size,true> {
   static void run(const Lhs&, Rhs&) {}
 };
 
