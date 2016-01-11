@@ -438,19 +438,18 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
     EIGEN_STATIC_ASSERT((!ReducingInnerMostDims | !PreservingInnerMostDims | (NumReducedDims == NumInputDims)),
                         YOU_MADE_A_PROGRAMMING_MISTAKE);
 
-    // Bitmap indicating if an input dimension is reduced or not.
-    array<bool, NumInputDims> reduced;
+    // Build the bitmap indicating if an input dimension is reduced or not.
     for (int i = 0; i < NumInputDims; ++i) {
-      reduced[i] = false;
+      m_reduced[i] = false;
     }
     for (int i = 0; i < NumReducedDims; ++i) {
       eigen_assert(op.dims()[i] >= 0);
       eigen_assert(op.dims()[i] < NumInputDims);
-      reduced[op.dims()[i]] = true;
+      m_reduced[op.dims()[i]] = true;
     }
 
     const typename TensorEvaluator<ArgType, Device>::Dimensions& input_dims = m_impl.dimensions();
-    internal::DimInitializer<Dimensions>::run(input_dims, reduced, &m_dimensions, &m_reducedDims);
+    internal::DimInitializer<Dimensions>::run(input_dims, m_reduced, &m_dimensions, &m_reducedDims);
 
     // Precompute output strides.
     if (NumOutputDims > 0) {
@@ -485,7 +484,7 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
       int outputIndex = 0;
       int reduceIndex = 0;
       for (int i = 0; i < NumInputDims; ++i) {
-	if (reduced[i]) {
+	if (m_reduced[i]) {
 	  m_reducedStrides[reduceIndex] = input_strides[i];
 	  ++reduceIndex;
 	} else {
@@ -527,14 +526,13 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
     }
 
     // Attempt to use an optimized reduction.
-#if 0
     else if (RunningOnGPU && data && (m_device.majorDeviceVersion() >= 3)) {
       bool reducing_inner_dims = true;
       for (int i = 0; i < NumReducedDims; ++i) {
         if (static_cast<int>(Layout) == static_cast<int>(ColMajor)) {
-          reducing_inner_dims &= m_reducedDims[i];
+          reducing_inner_dims &= m_reduced[i];
         } else {
-          reducing_inner_dims &= m_reducedDims[NumInputDims - 1 - i];
+          reducing_inner_dims &= m_reduced[NumInputDims - 1 - i];
         }
       }
       if (internal::InnerReducer<Self, Op, Device>::HasOptimizedImplementation &&
@@ -549,9 +547,9 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
       bool preserving_inner_dims = true;
       for (int i = 0; i < NumReducedDims; ++i) {
         if (static_cast<int>(Layout) == static_cast<int>(ColMajor)) {
-          preserving_inner_dims &= m_reducedDims[NumInputDims - 1 - i];
+          preserving_inner_dims &= m_reduced[NumInputDims - 1 - i];
         } else {
-          preserving_inner_dims &= m_reducedDims[i];
+          preserving_inner_dims &= m_reduced[i];
         }
       }
       if (internal::OuterReducer<Self, Op, Device>::HasOptimizedImplementation &&
@@ -563,7 +561,6 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
         return false;
       }
     }
-#endif
     return true;
   }
 
@@ -691,6 +688,8 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
     return startInput;
   }
 
+  // Bitmap indicating if an input dimension is reduced or not.
+  array<bool, NumInputDims> m_reduced;
   // Dimensions of the output of the operation.
   Dimensions m_dimensions;
   // Precomputed strides for the output tensor.

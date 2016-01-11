@@ -222,7 +222,7 @@ struct InnerReducer<Self, Op, GpuDevice> {
     const int num_per_thread = 128;
     const int num_blocks = 32;
 
-    LAUNCH_CUDA_KERNEL((InnerReductionKernel<num_per_thread>),
+    LAUNCH_CUDA_KERNEL((InnerReductionKernel<num_per_thread, Self, Op, Index>),
                        num_blocks, block_size, block_size*sizeof(float), device, reducer, self, num_coeffs_to_reduce, num_preserved_vals, output);
   }
 };
@@ -279,7 +279,7 @@ struct OuterReducer<Self, Op, GpuDevice> {
                            device.maxCudaThreadsPerMultiProcessor() / block_size;
     const int num_blocks = numext::mini<int>(max_blocks, dyn_blocks);
 
-    LAUNCH_CUDA_KERNEL((OuterReductionKernel<num_per_thread>),
+    LAUNCH_CUDA_KERNEL((OuterReductionKernel<num_per_thread, Self, Op, Index>),
                        num_blocks, block_size, 0, device, reducer, self, num_coeffs_to_reduce, num_preserved_vals, output);
   }
 };
