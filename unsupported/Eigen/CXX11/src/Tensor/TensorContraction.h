@@ -128,6 +128,7 @@ struct TensorContractionEvaluatorBase
     PacketAccess = (internal::packet_traits<Scalar>::size > 1),
     Layout = TensorEvaluator<LeftArgType, Device>::Layout,
     CoordAccess = false,  // to be implemented
+    RawAccess = true
   };
 
   // Most of the code is assuming that both input tensors are ColMajor. If the
@@ -146,8 +147,6 @@ struct TensorContractionEvaluatorBase
   static const int ContractDims = internal::array_size<Indices>::value;
   static const int NumDims = max_n_1<LDims + RDims - 2 * ContractDims>::size;
 
-  typedef array<Index, LDims> left_dim_mapper_t;
-  typedef array<Index, RDims> right_dim_mapper_t;
   typedef array<Index, ContractDims> contract_t;
   typedef array<Index, max_n_1<LDims - ContractDims>::size> left_nocontract_t;
   typedef array<Index, max_n_1<RDims - ContractDims>::size> right_nocontract_t;
@@ -194,8 +193,8 @@ struct TensorContractionEvaluatorBase
       // We need to flip all the pairs of contracting indices as well as
       // reversing the dimensions.
       for (int i = 0; i < ContractDims; i++) {
-        eval_op_indices[i].first = LDims - 1 - op.indices()[i].second;
-        eval_op_indices[i].second = RDims - 1 - op.indices()[i].first;
+        eval_op_indices[i].first = LDims - 1 - op.indices()[ContractDims - 1 - i].second;
+        eval_op_indices[i].second = RDims - 1 - op.indices()[ContractDims - 1 - i].first;
       }
     }
 
@@ -434,11 +433,11 @@ struct TensorContractionEvaluatorBase
   }
 
   template<int LoadMode>
-  EIGEN_DEVICE_FUNC PacketReturnType packet(Index index) const {
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE PacketReturnType packet(Index index) const {
     return internal::ploadt<Packet, LoadMode>(m_result + index);
   }
 
-  EIGEN_DEVICE_FUNC Scalar* data() const { return NULL; }
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar* data() const { return m_result; }
 
   protected:
   // Prevent assignment
@@ -502,9 +501,6 @@ struct TensorEvaluator<const TensorContractionOp<Indices, LeftArgType, RightArgT
   static const int RDims =
       internal::array_size<typename TensorEvaluator<EvalRightArgType, Device>::Dimensions>::value;
   static const int ContractDims = internal::array_size<Indices>::value;
-
-  typedef array<Index, LDims> left_dim_mapper_t;
-  typedef array<Index, RDims> right_dim_mapper_t;
 
   typedef array<Index, ContractDims> contract_t;
   typedef array<Index, max_n_1<LDims - ContractDims>::size> left_nocontract_t;
