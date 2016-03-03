@@ -226,12 +226,18 @@ struct InnerReducer<Self, Op, GpuDevice> {
                                                  internal::is_same<typename Self::CoeffReturnType, float>::value;
 
   template <typename Device, typename OutputType>
-  static EIGEN_DEVICE_FUNC void run(const Self&, Op&, const Device&, OutputType*, typename Self::Index, typename Self::Index) {
+  static EIGEN_DEVICE_FUNC bool run(const Self&, Op&, const Device&, OutputType*, typename Self::Index, typename Self::Index) {
     assert(false && "Should only be called to reduce floats on a gpu device");
+    return true;
   }
 
-  static EIGEN_DEVICE_FUNC void run(const Self& self, Op& reducer, const GpuDevice& device, float* output, typename Self::Index num_coeffs_to_reduce, typename Self::Index num_preserved_vals) {
+  static EIGEN_DEVICE_FUNC bool run(const Self& self, Op& reducer, const GpuDevice& device, float* output, typename Self::Index num_coeffs_to_reduce, typename Self::Index num_preserved_vals) {
     typedef typename Self::Index Index;
+
+    // It's faster to use the usual code.
+    if (num_coeffs_to_reduce <= 32) {
+      return true;
+    }
 
     const Index num_coeffs = num_coeffs_to_reduce * num_preserved_vals;
     const int block_size = 256;
@@ -255,6 +261,8 @@ struct InnerReducer<Self, Op, GpuDevice> {
 
     LAUNCH_CUDA_KERNEL((InnerReductionKernel<num_per_thread, Self, Op, Index>),
                        num_blocks, block_size, 0, device, reducer, self, num_coeffs_to_reduce, num_preserved_vals, output);
+
+    return false;
   }
 };
 
@@ -273,7 +281,7 @@ __global__ void OuterReductionKernel(Reducer reducer, const Self input, Index nu
   }
 
   // Do the reduction.
-  const Index max_iter = num_preserved_coeffs * numext::maxi<Index>(1, (num_coeffs_to_reduce - NumPerThread + 1));
+  const Index max_iter = num_preserved_coeffs * divup<Index>(num_coeffs_to_reduce, NumPerThread);
   for (Index i = thread_id; i < max_iter; i += num_threads) {
     const Index input_col = i % num_preserved_coeffs;
     const Index input_row = (i / num_preserved_coeffs) * NumPerThread;
@@ -297,12 +305,18 @@ struct OuterReducer<Self, Op, GpuDevice> {
                                                  internal::is_same<typename Self::CoeffReturnType, float>::value;
 
   template <typename Device, typename OutputType>
-  static EIGEN_DEVICE_FUNC void run(const Self&, Op&, const Device&, OutputType*, typename Self::Index, typename Self::Index) {
+  static EIGEN_DEVICE_FUNC bool run(const Self&, Op&, const Device&, OutputType*, typename Self::Index, typename Self::Index) {
     assert(false && "Should only be called to reduce floats on a gpu device");
+    return true;
   }
 
-  static EIGEN_DEVICE_FUNC void run(const Self& self, Op& reducer, const GpuDevice& device, float* output, typename Self::Index num_coeffs_to_reduce, typename Self::Index num_preserved_vals) {
+  static EIGEN_DEVICE_FUNC bool run(const Self& self, Op& reducer, const GpuDevice& device, float* output, typename Self::Index num_coeffs_to_reduce, typename Self::Index num_preserved_vals) {
     typedef typename Self::Index Index;
+
+    // It's faster to use the usual code.
+    if (num_coeffs_to_reduce <= 32) {
+      return true;
+    }
 
      const Index num_coeffs = num_coeffs_to_reduce * num_preserved_vals;
     const int block_size = 256;
@@ -326,6 +340,8 @@ struct OuterReducer<Self, Op, GpuDevice> {
 
     LAUNCH_CUDA_KERNEL((OuterReductionKernel<num_per_thread, Self, Op, Index>),
                        num_blocks, block_size, 0, device, reducer, self, num_coeffs_to_reduce, num_preserved_vals, output);
+
+    return false;
   }
 };
 

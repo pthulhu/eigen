@@ -345,8 +345,9 @@ template <typename Self, typename Op, typename Device>
 struct InnerReducer {
   static const bool HasOptimizedImplementation = false;
 
-  EIGEN_DEVICE_FUNC static void run(const Self&, Op&, const Device&, typename Self::CoeffReturnType*, typename Self::Index, typename Self::Index) {
+  EIGEN_DEVICE_FUNC static bool run(const Self&, Op&, const Device&, typename Self::CoeffReturnType*, typename Self::Index, typename Self::Index) {
     eigen_assert(false && "Not implemented");
+    return true;
   }
 };
 
@@ -355,8 +356,9 @@ template <typename Self, typename Op, typename Device>
 struct OuterReducer {
   static const bool HasOptimizedImplementation = false;
 
-  EIGEN_DEVICE_FUNC static void run(const Self&, Op&, const Device&, typename Self::CoeffReturnType*, typename Self::Index, typename Self::Index) {
+  EIGEN_DEVICE_FUNC static bool run(const Self&, Op&, const Device&, typename Self::CoeffReturnType*, typename Self::Index, typename Self::Index) {
     eigen_assert(false && "Not implemented");
+    return true;
   }
 };
 
@@ -515,7 +517,7 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
     // Use the FullReducer if possible.
     if (RunningFullReduction && internal::FullReducer<Self, Op, Device>::HasOptimizedImplementation &&
         ((RunningOnGPU && (m_device.majorDeviceVersion() >= 3)) ||
-         (internal::array_prod(m_impl.dimensions()) > 1024 * 1024))) {
+         (!RunningOnGPU && (internal::array_prod(m_impl.dimensions()) > 1024 * 1024)))) {
 
       bool need_assign = false;
       if (!data) {
@@ -544,8 +546,7 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
         const Index num_values_to_reduce = internal::array_prod(m_reducedDims);
         const Index num_coeffs_to_preserve = internal::array_prod(m_dimensions);
         Op reducer(m_reducer);
-        internal::InnerReducer<Self, Op, Device>::run(*this, reducer, m_device, data, num_values_to_reduce, num_coeffs_to_preserve);
-        return false;
+        return internal::InnerReducer<Self, Op, Device>::run(*this, reducer, m_device, data, num_values_to_reduce, num_coeffs_to_preserve);
       }
 
       bool preserving_inner_dims = true;
@@ -561,8 +562,7 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
         const Index num_values_to_reduce = internal::array_prod(m_reducedDims);
         const Index num_coeffs_to_preserve = internal::array_prod(m_dimensions);
         Op reducer(m_reducer);
-        internal::OuterReducer<Self, Op, Device>::run(*this, reducer, m_device, data, num_values_to_reduce, num_coeffs_to_preserve);
-        return false;
+        return internal::OuterReducer<Self, Op, Device>::run(*this, reducer, m_device, data, num_values_to_reduce, num_coeffs_to_preserve);
       }
     }
     return true;
