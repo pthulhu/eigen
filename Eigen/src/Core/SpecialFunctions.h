@@ -284,7 +284,7 @@ struct digamma_impl {
     bool negative;
 
     const Scalar maxnum = NumTraits<Scalar>::infinity();
-    const Scalar m_pi = 3.14159265358979323846;
+    const Scalar m_pi = EIGEN_PI;
 
     negative = 0;
     nz = 0.0;
@@ -296,8 +296,7 @@ struct digamma_impl {
     if (x <= zero) {
       negative = one;
       q = x;
-      using std::floor;
-      p = floor(q);
+      p = numext::floor(q);
       if (p == q) {
         return maxnum;
       }
@@ -310,8 +309,7 @@ struct digamma_impl {
           p += one;
           nz = q - p;
         }
-        using std::tan;
-        nz = m_pi / tan(m_pi * nz);
+        nz = m_pi / numext::tan(m_pi * nz);
       }
       else {
         nz = zero;
@@ -329,8 +327,7 @@ struct digamma_impl {
 
     y = digamma_impl_maybe_poly<Scalar>::run(s);
 
-    using std::log;
-    y = log(s) - (half / s) - y - w;
+    y = numext::log(s) - (half / s) - y - w;
 
     return (negative) ? y - nz : y;
   }
@@ -520,12 +517,11 @@ struct igammac_impl {
       Copyright 1985, 1987, 1992 by Stephen L. Moshier
       Direct inquiries to 30 Frost Street, Cambridge, MA 02140
     */
-    using std::log;
     const Scalar zero = 0;
     const Scalar one = 1;
     const Scalar two = 2;
     const Scalar machep = igamma_helper<Scalar>::machep();
-    const Scalar maxlog = log(NumTraits<Scalar>::highest());
+    const Scalar maxlog = numext::log(NumTraits<Scalar>::highest());
     const Scalar big = igamma_helper<Scalar>::big();
     const Scalar biginv = 1 / big;
     const Scalar nan = NumTraits<Scalar>::quiet_NaN();
@@ -546,12 +542,11 @@ struct igammac_impl {
     if (x == inf) return zero;  // std::isinf crashes on CUDA
 
     /* Compute  x**a * exp(-x) / gamma(a)  */
-    ax = a * log(x) - x - lgamma_impl<Scalar>::run(a);
+    ax = a * numext::log(x) - x - lgamma_impl<Scalar>::run(a);
     if (ax < -maxlog) {  // underflow
       return zero;
     }
-    using std::exp;
-    ax = exp(ax);
+    ax = numext::exp(ax);
 
     // continued fraction
     y = one - a;
@@ -563,7 +558,6 @@ struct igammac_impl {
     qkm1 = z * x;
     ans = pkm1 / qkm1;
 
-    using std::abs;
     while (true) {
       c += one;
       y += one;
@@ -573,7 +567,7 @@ struct igammac_impl {
       qk = qkm1 * z - qkm2 * yc;
       if (qk != zero) {
         r = pk / qk;
-        t = abs((ans - r) / r);
+        t = numext::abs((ans - r) / r);
         ans = r;
       } else {
         t = one;
@@ -684,11 +678,10 @@ struct igamma_impl {
      *          k=0   | (a+k+1)
      *
      */
-    using std::log;
     const Scalar zero = 0;
     const Scalar one = 1;
     const Scalar machep = igamma_helper<Scalar>::machep();
-    const Scalar maxlog = log(NumTraits<Scalar>::highest());
+    const Scalar maxlog = numext::log(NumTraits<Scalar>::highest());
     const Scalar nan = NumTraits<Scalar>::quiet_NaN();
 
     double ans, ax, c, r;
@@ -704,13 +697,12 @@ struct igamma_impl {
     }
 
     /* Compute  x**a * exp(-x) / gamma(a)  */
-    ax = a * log(x) - x - lgamma_impl<Scalar>::run(a);
+    ax = a * numext::log(x) - x - lgamma_impl<Scalar>::run(a);
     if (ax < -maxlog) {
       // underflow
       return zero;
     }
-    using std::exp;
-    ax = exp(ax);
+    ax = numext::exp(ax);
 
     /* power series */
     r = a;

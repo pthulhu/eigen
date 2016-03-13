@@ -32,7 +32,6 @@ struct traits<TensorImagePatchOp<Rows, Cols, XprType> > : public traits<XprType>
 {
   typedef typename internal::remove_const<typename XprType::Scalar>::type Scalar;
   typedef traits<XprType> XprTraits;
-  typedef typename packet_traits<Scalar>::type Packet;
   typedef typename XprTraits::StorageKind StorageKind;
   typedef typename XprTraits::Index Index;
   typedef typename XprType::Nested Nested;
@@ -60,10 +59,8 @@ class TensorImagePatchOp : public TensorBase<TensorImagePatchOp<Rows, Cols, XprT
 {
   public:
   typedef typename Eigen::internal::traits<TensorImagePatchOp>::Scalar Scalar;
-  typedef typename Eigen::internal::traits<TensorImagePatchOp>::Packet Packet;
   typedef typename Eigen::NumTraits<Scalar>::Real RealScalar;
   typedef typename XprType::CoeffReturnType CoeffReturnType;
-  typedef typename XprType::PacketReturnType PacketReturnType;
   typedef typename Eigen::internal::nested<TensorImagePatchOp>::type Nested;
   typedef typename Eigen::internal::traits<TensorImagePatchOp>::StorageKind StorageKind;
   typedef typename Eigen::internal::traits<TensorImagePatchOp>::Index Index;
@@ -167,7 +164,7 @@ struct TensorEvaluator<const TensorImagePatchOp<Rows, Cols, ArgType>, Device>
     IsAligned = false,
     PacketAccess = TensorEvaluator<ArgType, Device>::PacketAccess,
     Layout = TensorEvaluator<ArgType, Device>::Layout,
-    CoordAccess = NumDims == 5,
+    CoordAccess = false,
     RawAccess = false
   };
 
@@ -311,7 +308,7 @@ struct TensorEvaluator<const TensorImagePatchOp<Rows, Cols, ArgType>, Device>
   }
 
   typedef typename XprType::CoeffReturnType CoeffReturnType;
-  typedef typename XprType::PacketReturnType PacketReturnType;
+  typedef typename PacketType<CoeffReturnType, Device>::type PacketReturnType;
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Dimensions& dimensions() const { return m_dimensions; }
 
@@ -436,59 +433,6 @@ struct TensorEvaluator<const TensorImagePatchOp<Rows, Cols, ArgType>, Device>
   Index userInColStride() const { return m_in_col_strides; }
   Index rowInflateStride() const { return m_row_inflate_strides; }
   Index colInflateStride() const { return m_col_inflate_strides; }
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE CoeffReturnType coeff(const array<Index, NumDims>& coords) const
-  {
-    // Location of the first element of the patch.
-    // ColMajor
-    // 0: d, 1: patch_rows, 2: patch_cols, 3: number of patches, 4: number of batches
-    // RowMajor
-    // 0: number of batches, 1: number of patches, 2: patch_cols , 3: patch_rows, 4: d
-    const Index patch2DIndex = coords[static_cast<int>(Layout) == static_cast<int>(ColMajor) ? 3 : 1];
-
-    array<Index, NumDims-1> inputCoords;
-    Index input_col_idx = patch2DIndex / m_fastInputColsEff;
-    Index inputCol = input_col_idx  + coords[1] * m_in_row_strides - m_rowPaddingTop;
-    Index inputRow = patch2DIndex - input_col_idx * m_input_cols_eff + coords[2] * m_in_col_strides - m_colPaddingLeft;
-    const Index origInputCol = (m_col_inflate_strides == 1) ? inputCol : ((inputCol >= 0) ? (inputCol / m_fastInputColStride) : 0);
-    const Index origInputRow = (m_row_inflate_strides == 1) ? inputRow : ((inputRow >= 0) ? (inputRow / m_fastInputRowStride) : 0);
-    if (static_cast<int>(Layout) == static_cast<int>(ColMajor)) {
-      inputCoords[0] = coords[0];  // depth
-      inputCoords[1] = origInputCol;
-      inputCoords[2] = origInputRow;
-      inputCoords[3] = coords[4];  // batch
-    } else {
-      inputCoords[3] = coords[4];  // depth
-      inputCoords[2] = origInputCol;
-      inputCoords[1] = origInputRow;
-      inputCoords[0] = coords[0];  // batch
-    }
-    // If the computed coordinates are outside the original image perimeter, return 0.
-    if (inputCol < 0 || inputCol >= m_input_cols_eff || inputRow < 0 || inputRow >= m_input_rows_eff ||
-        ((m_col_inflate_strides != 1) && (inputCol != origInputCol * m_col_inflate_strides)) ||
-        ((m_row_inflate_strides != 1) && (inputRow != origInputRow * m_row_inflate_strides))) {
-      return Scalar(m_paddingValue);
-    }
-    if (TensorEvaluator<ArgType, Device>::CoordAccess) {
-      return m_impl.coeff(inputCoords);
-    } else {
-      Index inputIndex;
-      if (static_cast<int>(Layout) == static_cast<int>(ColMajor)) {
-        inputIndex =
-          inputCoords[3] * m_patchInputStride +
-          inputCoords[2] * m_colInputStride +
-          inputCoords[1] * m_rowInputStride +
-          inputCoords[0];
-      } else {
-        inputIndex =
-          inputCoords[1] * m_patchInputStride +
-          inputCoords[2] * m_colInputStride +
-          inputCoords[3] * m_rowInputStride +
-          inputCoords[4];
-      }
-      return m_impl.coeff(inputIndex);
-    }
-  }
 
  protected:
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE PacketReturnType packetWithPossibleZero(Index index) const

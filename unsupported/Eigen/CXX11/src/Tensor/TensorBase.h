@@ -31,7 +31,6 @@ class TensorBase<Derived, ReadOnlyAccessors>
     typedef typename DerivedTraits::Scalar Scalar;
     typedef typename DerivedTraits::Index Index;
     typedef typename internal::remove_const<Scalar>::type CoeffReturnType;
-    typedef typename internal::packet_traits<CoeffReturnType>::type PacketReturnType;
     static const int NumDimensions = DerivedTraits::NumDimensions;
 
     // Generic nullary operation support.
@@ -231,6 +230,25 @@ class TensorBase<Derived, ReadOnlyAccessors>
     cast() const {
       return TensorConversionOp<NewType, const Derived>(derived());
     }
+
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_round_op<Scalar>, const Derived>
+    round() const {
+      return unaryExpr(internal::scalar_round_op<Scalar>());
+    }
+
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_ceil_op<Scalar>, const Derived>
+    ceil() const {
+      return unaryExpr(internal::scalar_ceil_op<Scalar>());
+    }
+
+    EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const TensorCwiseUnaryOp<internal::scalar_floor_op<Scalar>, const Derived>
+    floor() const {
+      return unaryExpr(internal::scalar_floor_op<Scalar>());
+    }
+
 
     // Generic binary operation support.
     template <typename CustomBinaryOp, typename OtherDerived> EIGEN_DEVICE_FUNC
@@ -639,7 +657,12 @@ class TensorBase<Derived, ReadOnlyAccessors>
     template <typename PaddingDimensions> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
     const TensorPaddingOp<const PaddingDimensions, const Derived>
     pad(const PaddingDimensions& padding) const {
-      return TensorPaddingOp<const PaddingDimensions, const Derived>(derived(), padding);
+      return TensorPaddingOp<const PaddingDimensions, const Derived>(derived(), padding, internal::scalar_cast_op<int, Scalar>()(0));
+    }
+    template <typename PaddingDimensions> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+    const TensorPaddingOp<const PaddingDimensions, const Derived>
+    pad(const PaddingDimensions& padding, const Scalar padding_value) const {
+      return TensorPaddingOp<const PaddingDimensions, const Derived>(derived(), padding, padding_value);
     }
     template <typename Shuffle> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
     const TensorShufflingOp<const Shuffle, const Derived>
@@ -697,7 +720,6 @@ class TensorBase<Derived, WriteAccessors> : public TensorBase<Derived, ReadOnlyA
     typedef typename DerivedTraits::Scalar Scalar;
     typedef typename DerivedTraits::Index Index;
     typedef Scalar CoeffReturnType;
-    typedef typename internal::packet_traits<Scalar>::type PacketReturnType;
     static const int NumDimensions = DerivedTraits::NumDimensions;
 
     template <typename Scalar, int NumIndices, int Options, typename IndexType> friend class Tensor;
