@@ -46,7 +46,7 @@
 
 // Make our own __half definition that is similar to CUDA's.
 struct __half {
-  EIGEN_DEVICE_FUNC __half() : x() {}
+  EIGEN_DEVICE_FUNC __half() {}
   explicit EIGEN_DEVICE_FUNC __half(unsigned short raw) : x(raw) {}
   unsigned short x;
 };
