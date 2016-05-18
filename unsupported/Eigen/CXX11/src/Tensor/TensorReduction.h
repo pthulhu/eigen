@@ -248,15 +248,12 @@ struct FullReducer<Self, Op, ThreadPoolDevice, Vectorizable> {
       *output = reducer.finalize(reducer.initialize());
       return;
     }
-    int num_threads = device.numThreads();
-    if (num_threads > 1) {
-      const TensorOpCost cost =
-          self.m_impl.costPerCoeff(Vectorizable) +
-          TensorOpCost(0, 0, internal::functor_traits<Op>::Cost, Vectorizable,
-                       PacketSize);
-      num_threads = TensorCostModel<ThreadPoolDevice>::numThreads(
-          num_coeffs, cost, device.numThreads());
-    }
+    const TensorOpCost cost =
+        self.m_impl.costPerCoeff(Vectorizable) +
+        TensorOpCost(0, 0, internal::functor_traits<Op>::Cost, Vectorizable,
+                     PacketSize);
+    const int num_threads = TensorCostModel<ThreadPoolDevice>::numThreads(
+        num_coeffs, cost, device.numThreads());
     if (num_threads == 1) {
       *output =
           InnerMostDimReducer<Self, Op, Vectorizable>::reduce(self, 0, num_coeffs, reducer);
