@@ -27,7 +27,7 @@ private:
       default_alignment = compute_default_alignment<_Scalar,max_size>::value,
       actual_alignment = ((_Options&DontAlign)==0) ? default_alignment : 0,
       required_alignment = unpacket_traits<PacketScalar>::alignment,
-      packet_access_bit = packet_traits<_Scalar>::Vectorizable && (actual_alignment>=required_alignment) ? PacketAccessBit : 0
+      packet_access_bit = (packet_traits<_Scalar>::Vectorizable && (EIGEN_UNALIGNED_VECTORIZE || (actual_alignment>=required_alignment))) ? PacketAccessBit : 0
     };
     
 public:
@@ -268,7 +268,7 @@ class Matrix
       : Base(internal::constructor_without_unaligned_array_assert())
     { Base::_check_template_params(); EIGEN_INITIALIZE_COEFFS_IF_THAT_OPTION_IS_ENABLED }
 
-#ifdef EIGEN_HAVE_RVALUE_REFERENCES
+#if EIGEN_HAS_RVALUE_REFERENCES
     EIGEN_DEVICE_FUNC
     Matrix(Matrix&& other)
       : Base(std::move(other))

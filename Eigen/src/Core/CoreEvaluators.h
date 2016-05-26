@@ -755,9 +755,7 @@ struct evaluator<Block<ArgType, BlockRows, BlockCols, InnerPanel> >
     OuterStrideAtCompileTime = HasSameStorageOrderAsArgType
                              ? int(outer_stride_at_compile_time<ArgType>::ret)
                              : int(inner_stride_at_compile_time<ArgType>::ret),
-    MaskPacketAccessBit = (InnerSize == Dynamic || (InnerSize % packet_traits<Scalar>::size) == 0)
-                       && (InnerStrideAtCompileTime == 1)
-                        ? PacketAccessBit : 0,
+    MaskPacketAccessBit = (InnerStrideAtCompileTime == 1) ? PacketAccessBit : 0,
     
     FlagsLinearAccessBit = (RowsAtCompileTime == 1 || ColsAtCompileTime == 1 || (InnerPanel && (evaluator<ArgType>::Flags&LinearAccessBit))) ? LinearAccessBit : 0,    
     FlagsRowMajorBit = XprType::Flags&RowMajorBit,
@@ -884,7 +882,7 @@ struct block_evaluator<ArgType, BlockRows, BlockCols, InnerPanel, /* HasDirectAc
     : mapbase_evaluator<XprType, typename XprType::PlainObject>(block) 
   {
     // TODO: for the 3.3 release, this should be turned to an internal assertion, but let's keep it as is for the beta lifetime
-    eigen_assert(((size_t(block.data()) % EIGEN_PLAIN_ENUM_MAX(1,evaluator<XprType>::Alignment)) == 0) && "data is not aligned");
+    eigen_assert(((internal::UIntPtr(block.data()) % EIGEN_PLAIN_ENUM_MAX(1,evaluator<XprType>::Alignment)) == 0) && "data is not aligned");
   }
 };
 
@@ -1325,7 +1323,7 @@ struct evaluator<Diagonal<ArgType, DiagIndex> >
   enum {
     CoeffReadCost = evaluator<ArgType>::CoeffReadCost,
     
-    Flags = (unsigned int)evaluator<ArgType>::Flags & (HereditaryBits | LinearAccessBit | DirectAccessBit) & ~RowMajorBit,
+    Flags = (unsigned int)(evaluator<ArgType>::Flags & (HereditaryBits | DirectAccessBit) & ~RowMajorBit) | LinearAccessBit,
     
     Alignment = 0
   };

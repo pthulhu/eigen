@@ -273,7 +273,7 @@ struct TensorEvaluator<const TensorContractionOp<Indices, LeftArgType, RightArgT
     // First, we are interested in parallel packing if there are few tasks.
     bool parallel_pack = num_threads >= nm * nn;
     // Also do parallel packing if all data fits into L2$.
-    if (m * bk * sizeof(LhsScalar) + n * bk * sizeof(RhsScalar) <=
+    if (m * bk * Index(sizeof(LhsScalar)) + n * bk * Index(sizeof(RhsScalar)) <=
         l2CacheSize() * num_threads)
       parallel_pack = true;
     // But don't do it if we will use each rhs only once. Locality seems to be
@@ -361,7 +361,7 @@ struct TensorEvaluator<const TensorContractionOp<Indices, LeftArgType, RightArgT
       packed_mem_ = static_cast<char*>(internal::aligned_malloc(
           (nm0_ * lhs_size + nn0_ * rhs_size) * std::min<size_t>(nk_, P - 1)));
       char* mem = static_cast<char*>(packed_mem_);
-      for (Index x = 0; x < numext::mini<size_t>(nk_, P - 1); x++) {
+      for (Index x = 0; x < numext::mini<Index>(nk_, P - 1); x++) {
         packed_lhs_[x].resize(nm0_);
         for (Index m = 0; m < nm0_; m++) {
           packed_lhs_[x][m] = reinterpret_cast<LhsScalar*>(mem);
@@ -568,10 +568,6 @@ struct TensorEvaluator<const TensorContractionOp<Indices, LeftArgType, RightArgT
           (parallel_pack_ ? nm_ + nn_ : (shard_by_col_ ? nn_ : nm_)) +
           nm_ * nn_;
       if (k < nk_) {
-        // It is important to copy out nm_ and nn_, because once we kick off
-        // the last packing operation this and device_ can be destroyed.
-        Index nm = nm_;
-        Index nn = nn_;
         // Issue lhs/rhs packing. Their completion will in turn kick off
         // kernels.
         if (parallel_pack_) {

@@ -98,7 +98,7 @@ struct polevl<Scalar, 0> {
 }  // end namespace cephes
 
 /****************************************************************************
- * Implementation of lgamma                                                 *
+ * Implementation of lgamma, requires C++11/C99                             *
  ****************************************************************************/
 
 template <typename Scalar>
@@ -116,7 +116,7 @@ struct lgamma_retval {
   typedef Scalar type;
 };
 
-#ifdef EIGEN_HAS_C99_MATH
+#if EIGEN_HAS_C99_MATH
 template <>
 struct lgamma_impl<float> {
   EIGEN_DEVICE_FUNC
@@ -131,27 +131,13 @@ struct lgamma_impl<double> {
 #endif
 
 /****************************************************************************
- * Implementation of digamma (psi)                                          *
+ * Implementation of digamma (psi), based on Cephes                         *
  ****************************************************************************/
 
 template <typename Scalar>
 struct digamma_retval {
   typedef Scalar type;
 };
-
-#ifndef EIGEN_HAS_C99_MATH
-
-template <typename Scalar>
-struct digamma_impl {
-  EIGEN_DEVICE_FUNC
-  static EIGEN_STRONG_INLINE Scalar run(Scalar x) {
-    EIGEN_STATIC_ASSERT((internal::is_same<Scalar, Scalar>::value == false),
-                        THIS_TYPE_IS_NOT_SUPPORTED);
-    return Scalar(0);
-  }
-};
-
-#else
 
 /*
  *
@@ -331,10 +317,8 @@ struct digamma_impl {
   }
 };
 
-#endif  // EIGEN_HAS_C99_MATH
-
 /****************************************************************************
- * Implementation of erf                                                    *
+ * Implementation of erf, requires C++11/C99                                *
  ****************************************************************************/
 
 template <typename Scalar>
@@ -352,7 +336,7 @@ struct erf_retval {
   typedef Scalar type;
 };
 
-#ifdef EIGEN_HAS_C99_MATH
+#if EIGEN_HAS_C99_MATH
 template <>
 struct erf_impl<float> {
   EIGEN_DEVICE_FUNC
@@ -367,7 +351,7 @@ struct erf_impl<double> {
 #endif  // EIGEN_HAS_C99_MATH
 
 /***************************************************************************
-* Implementation of erfc                                                   *
+* Implementation of erfc, requires C++11/C99                               *
 ****************************************************************************/
 
 template <typename Scalar>
@@ -385,7 +369,7 @@ struct erfc_retval {
   typedef Scalar type;
 };
 
-#ifdef EIGEN_HAS_C99_MATH
+#if EIGEN_HAS_C99_MATH
 template <>
 struct erfc_impl<float> {
   EIGEN_DEVICE_FUNC
@@ -399,31 +383,16 @@ struct erfc_impl<double> {
 };
 #endif  // EIGEN_HAS_C99_MATH
 
-/****************************************************************************
- * Implementation of igammac (complemented incomplete gamma integral)       *
- ****************************************************************************/
+/**************************************************************************************************************
+ * Implementation of igammac (complemented incomplete gamma integral), based on Cephes but requires C++11/C99 *
+ **************************************************************************************************************/
 
 template <typename Scalar>
 struct igammac_retval {
   typedef Scalar type;
 };
 
-#ifndef EIGEN_HAS_C99_MATH
-
-template <typename Scalar>
-struct igammac_impl {
-  EIGEN_DEVICE_FUNC
-  static Scalar run(Scalar a, Scalar x) {
-    EIGEN_STATIC_ASSERT((internal::is_same<Scalar, Scalar>::value == false),
-                        THIS_TYPE_IS_NOT_SUPPORTED);
-    return Scalar(0);
-  }
-};
-
-#else
-
-template <typename Scalar> struct igamma_impl;  // predeclare igamma_impl
-
+// NOTE: igamma_helper is also used to implement zeta
 template <typename Scalar>
 struct igamma_helper {
   EIGEN_DEVICE_FUNC
@@ -456,6 +425,22 @@ struct igamma_helper<double> {
     return 1.0 / NumTraits<double>::epsilon();
   }
 };
+
+#if !EIGEN_HAS_C99_MATH
+
+template <typename Scalar>
+struct igammac_impl {
+  EIGEN_DEVICE_FUNC
+  static Scalar run(Scalar a, Scalar x) {
+    EIGEN_STATIC_ASSERT((internal::is_same<Scalar, Scalar>::value == false),
+                        THIS_TYPE_IS_NOT_SUPPORTED);
+    return Scalar(0);
+  }
+};
+
+#else
+
+template <typename Scalar> struct igamma_impl;  // predeclare igamma_impl
 
 template <typename Scalar>
 struct igammac_impl {
@@ -614,16 +599,16 @@ struct igammac_impl {
 
 #endif  // EIGEN_HAS_C99_MATH
 
-/****************************************************************************
- * Implementation of igamma (incomplete gamma integral)                     *
- ****************************************************************************/
+/************************************************************************************************
+ * Implementation of igamma (incomplete gamma integral), based on Cephes but requires C++11/C99 *
+ ************************************************************************************************/
 
 template <typename Scalar>
 struct igamma_retval {
   typedef Scalar type;
 };
 
-#ifndef EIGEN_HAS_C99_MATH
+#if !EIGEN_HAS_C99_MATH
 
 template <typename Scalar>
 struct igamma_impl {
@@ -770,28 +755,14 @@ struct igamma_impl {
 
 #endif  // EIGEN_HAS_C99_MATH
 
-/****************************************************************************
- * Implementation of Riemann zeta function of two arguments                 *
- ****************************************************************************/
+/*****************************************************************************
+ * Implementation of Riemann zeta function of two arguments, based on Cephes *
+ *****************************************************************************/
 
 template <typename Scalar>
 struct zeta_retval {
     typedef Scalar type;
 };
-    
-#ifndef EIGEN_HAS_C99_MATH
-    
-template <typename Scalar>
-struct zeta_impl {
-    EIGEN_DEVICE_FUNC
-    static EIGEN_STRONG_INLINE Scalar run(Scalar x, Scalar q) {
-        EIGEN_STATIC_ASSERT((internal::is_same<Scalar, Scalar>::value == false),
-                            THIS_TYPE_IS_NOT_SUPPORTED);
-        return Scalar(0);
-    }
-};
-    
-#else
 
 template <typename Scalar>
 struct zeta_impl_series {
@@ -986,11 +957,9 @@ struct zeta_impl {
         return s;
   }
 };
-    
-#endif  // EIGEN_HAS_C99_MATH
 
 /****************************************************************************
- * Implementation of polygamma function                                     *
+ * Implementation of polygamma function, requires C++11/C99                 *
  ****************************************************************************/
 
 template <typename Scalar>
@@ -998,7 +967,7 @@ struct polygamma_retval {
     typedef Scalar type;
 };
     
-#ifndef EIGEN_HAS_C99_MATH
+#if !EIGEN_HAS_C99_MATH
     
 template <typename Scalar>
 struct polygamma_impl {

@@ -31,7 +31,7 @@ template<typename QuatType> void check_slerp(const QuatType& q0, const QuatType&
 
   Scalar theta_tot = AA(q1*q0.inverse()).angle();
   if(theta_tot>Scalar(EIGEN_PI))
-    theta_tot = Scalar(2.*EIGEN_PI)-theta_tot;
+    theta_tot = Scalar(2.)*Scalar(EIGEN_PI)-theta_tot;
   for(Scalar t=0; t<=Scalar(1.001); t+=Scalar(0.1))
   {
     QuatType q = q0.slerp(t,q1);
@@ -50,13 +50,12 @@ template<typename Scalar, int Options> void quaternion(void)
   using std::abs;
   typedef Matrix<Scalar,3,1> Vector3;
   typedef Matrix<Scalar,3,3> Matrix3;
-  typedef Matrix<Scalar,4,1> Vector4;
   typedef Quaternion<Scalar,Options> Quaternionx;
   typedef AngleAxis<Scalar> AngleAxisx;
 
   Scalar largeEps = test_precision<Scalar>();
   if (internal::is_same<Scalar,float>::value)
-    largeEps = 1e-3f;
+    largeEps = Scalar(1e-3);
 
   Scalar eps = internal::random<Scalar>() * Scalar(1e-2);
 
@@ -157,8 +156,8 @@ template<typename Scalar, int Options> void quaternion(void)
   Quaternionx *q = new Quaternionx;
   delete q;
 
-  q1 = AngleAxisx(a, v0.normalized());
-  q2 = AngleAxisx(b, v1.normalized());
+  q1 = Quaternionx::UnitRandom();
+  q2 = Quaternionx::UnitRandom();
   check_slerp(q1,q2);
 
   q1 = AngleAxisx(b, v1.normalized());
@@ -169,7 +168,7 @@ template<typename Scalar, int Options> void quaternion(void)
   q2 = AngleAxisx(-b, -v1.normalized());
   check_slerp(q1,q2);
 
-  q1.coeffs() = Vector4::Random().normalized();
+  q1 = Quaternionx::UnitRandom();
   q2.coeffs() = -q1.coeffs();
   check_slerp(q1,q2);
 }

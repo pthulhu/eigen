@@ -87,7 +87,7 @@ struct preserve_inner_most_dims {
   static const bool value = false;
 };
 
-#if defined(EIGEN_HAS_CONSTEXPR) && defined(EIGEN_HAS_VARIADIC_TEMPLATES)
+#if EIGEN_HAS_CONSTEXPR && EIGEN_HAS_VARIADIC_TEMPLATES
 template <typename ReducedDims, int NumTensorDims>
 struct are_inner_most_dims<ReducedDims, NumTensorDims, ColMajor>{
   static const bool tmp1 = indices_statically_known_to_increase<ReducedDims>();
@@ -248,16 +248,12 @@ struct FullReducer<Self, Op, ThreadPoolDevice, Vectorizable> {
       *output = reducer.finalize(reducer.initialize());
       return;
     }
-#ifdef EIGEN_USE_COST_MODEL
     const TensorOpCost cost =
         self.m_impl.costPerCoeff(Vectorizable) +
         TensorOpCost(0, 0, internal::functor_traits<Op>::Cost, Vectorizable,
                      PacketSize);
     const int num_threads = TensorCostModel<ThreadPoolDevice>::numThreads(
         num_coeffs, cost, device.numThreads());
-#else
-    const int num_threads = device.numThreads();
-#endif
     if (num_threads == 1) {
       *output =
           InnerMostDimReducer<Self, Op, Vectorizable>::reduce(self, 0, num_coeffs, reducer);
@@ -325,11 +321,15 @@ __global__ void FullReductionKernel(R, const S, I, typename S::CoeffReturnType*)
 
 #ifdef EIGEN_HAS_CUDA_FP16
 template <typename S, typename R, typename I>
-__global__ void ReductionInitKernelHalfFloat(R, const S, I, half2*);
+__global__ void ReductionInitFullReduxKernelHalfFloat(R, const S, I, half2*);
 template <int B, int N, typename S, typename R, typename I>
 __global__ void FullReductionKernelHalfFloat(R, const S, I, half*, half2*);
 template <int NPT, typename S, typename R, typename I>
+<<<<<<< local
+__global__ void InnerReductionKernelHalfFloat(R, const S, I, I, half*);
+=======
 __global__ void InnerReductionKernelHalfFloat(R, const S, I, I, half*, half2*);
+>>>>>>> other
 
 #endif
 
@@ -475,22 +475,14 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Dimensions& dimensions() const { return m_dimensions; }
 
-  static bool size_large_enough(Index total_size) {
-#ifndef EIGEN_USE_COST_MODEL
-    return total_size > 1024 * 1024;
-#else
-    return true || total_size;
-#endif
-  }
-
   EIGEN_STRONG_INLINE EIGEN_DEVICE_FUNC bool evalSubExprsIfNeeded(CoeffReturnType* data) {
     m_impl.evalSubExprsIfNeeded(NULL);
 
     // Use the FullReducer if possible.
-    if (RunningFullReduction && internal::FullReducer<Self, Op, Device>::HasOptimizedImplementation &&
+    if (RunningFullReduction &&
+        internal::FullReducer<Self, Op, Device>::HasOptimizedImplementation &&
         ((RunningOnGPU && (m_device.majorDeviceVersion() >= 3)) ||
-         (!RunningOnGPU && size_large_enough(internal::array_prod(m_impl.dimensions()))))) {
-
+         !RunningOnGPU)) {
       bool need_assign = false;
       if (!data) {
         m_result = static_cast<CoeffReturnType*>(m_device.allocate(sizeof(CoeffReturnType)));
@@ -630,9 +622,13 @@ struct TensorEvaluator<const TensorReductionOp<Op, Dims, ArgType>, Device>
 #if defined(EIGEN_USE_GPU) && defined(__CUDACC__)
   template <int B, int N, typename S, typename R, typename I> friend void internal::FullReductionKernel(R, const S, I, typename S::CoeffReturnType*);
 #ifdef EIGEN_HAS_CUDA_FP16
-  template <typename S, typename R, typename I> friend void internal::ReductionInitKernelHalfFloat(R, const S, I, half2*);
+  template <typename S, typename R, typename I> friend void internal::ReductionInitFullReduxKernelHalfFloat(R, const S, I, half2*);
   template <int B, int N, typename S, typename R, typename I> friend void internal::FullReductionKernelHalfFloat(R, const S, I, half*, half2*);
+<<<<<<< local
+  template <int NPT, typename S, typename R, typename I> friend void internal::InnerReductionKernelHalfFloat(R, const S, I, I, half*);
+=======
   template <int NPT, typename S, typename R, typename I> friend void internal::InnerReductionKernelHalfFloat(R, const S, I, I, half*, half2*);
+>>>>>>> other
 #endif
   template <int NPT, typename S, typename R, typename I> friend void internal::InnerReductionKernel(R, const S, I, I, typename S::CoeffReturnType*);
 

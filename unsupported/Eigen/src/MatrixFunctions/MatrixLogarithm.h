@@ -233,8 +233,8 @@ void matrix_log_compute_big(const MatrixType& A, MatrixType& result)
   MatrixType T = A, sqrtT;
 
   int maxPadeDegree = matrix_log_max_pade_degree<Scalar>::value;
-  const RealScalar maxNormForPade = maxPadeDegree<= 5? 5.3149729967117310e-1:                     // single precision
-                                    maxPadeDegree<= 7? 2.6429608311114350e-1:                     // double precision
+  const RealScalar maxNormForPade = maxPadeDegree<= 5? 5.3149729967117310e-1L:                    // single precision
+                                    maxPadeDegree<= 7? 2.6429608311114350e-1L:                    // double precision
                                     maxPadeDegree<= 8? 2.32777776523703892094e-1L:                // extended precision
                                     maxPadeDegree<=10? 1.05026503471351080481093652651105e-1L:    // double-double
                                                        1.1880960220216759245467951592883642e-1L;  // quadruple precision
@@ -334,9 +334,8 @@ public:
     typedef internal::traits<DerivedEvalTypeClean> Traits;
     static const int RowsAtCompileTime = Traits::RowsAtCompileTime;
     static const int ColsAtCompileTime = Traits::ColsAtCompileTime;
-    static const int Options = DerivedEvalTypeClean::Options;
     typedef std::complex<typename NumTraits<Scalar>::Real> ComplexScalar;
-    typedef Matrix<ComplexScalar, Dynamic, Dynamic, Options, RowsAtCompileTime, ColsAtCompileTime> DynMatrixType;
+    typedef Matrix<ComplexScalar, Dynamic, Dynamic, 0, RowsAtCompileTime, ColsAtCompileTime> DynMatrixType;
     typedef internal::MatrixLogarithmAtomic<DynMatrixType> AtomicType;
     AtomicType atomic;
     
